@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react";
+import Link from "next/link";
 import { Download, RefreshCw, Upload } from "lucide-react";
 import {
   Bar,
@@ -25,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CombustivelNav } from "@/components/combustivel-nav";
 import { Input } from "@/components/ui/input";
 import { ModuleNav } from "@/components/module-nav";
 import { Select } from "@/components/ui/select";
@@ -252,6 +254,7 @@ export default function DashboardClient() {
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.18),_transparent_20%),linear-gradient(180deg,#020617_0%,#0f172a_45%,#020617_100%)]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <ModuleNav />
+        <CombustivelNav />
 
         <header className="rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/25 backdrop-blur-sm">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -266,6 +269,9 @@ export default function DashboardClient() {
             </div>
 
             <div className="flex flex-wrap gap-3">
+              <Button asChild variant="secondary">
+                <Link href="/combustivel/auditoria">Auditar faturas</Link>
+              </Button>
               <Button variant="secondary" onClick={() => void loadDashboard()} disabled={isLoading}>
                 <RefreshCw className={cn("mr-2 size-4", isLoading && "animate-spin")} />
                 Atualizar
