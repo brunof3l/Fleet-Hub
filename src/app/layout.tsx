@@ -13,9 +13,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Dashboard de Gestao de Combustivel",
+  title: "Fleet Hub | Combustivel e Velocidade",
   description:
-    "Dashboard web para importacao, analise e automacao de abastecimentos com Next.js 14, Neon PostgreSQL e Tailwind CSS.",
+    "Painel web unificado para combustivel e velocidade, com importacao de planilhas, analise operacional e integracao da frota.",
 };
 
 export default function RootLayout({
