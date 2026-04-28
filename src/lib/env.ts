@@ -31,3 +31,12 @@ export function getResendApiKey(): string | undefined {
 export function getResendFromEmail(): string | undefined {
   return readEnv("RESEND_FROM_EMAIL");
 }
+
+export function getOpenAiApiKey(): string {
+  const value = readEnv("OPENAI_API_KEY");
+  if (!value) {
+    throw new Error("OPENAI_API_KEY nao configurado.");
+  }
+
+  return value;
+}
