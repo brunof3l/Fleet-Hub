@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ModuleNav } from "@/components/module-nav";
 import { Select } from "@/components/ui/select";
 import { Table, TableScroll } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -199,7 +200,7 @@ export default function DashboardClient() {
     }
   }
 
-  const records = summary?.records ?? [];
+  const records = useMemo(() => summary?.records ?? [], [summary?.records]);
 
   const applyQuickRange = useCallback((days: number) => {
     const end = new Date();
@@ -250,12 +251,18 @@ export default function DashboardClient() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.18),_transparent_20%),linear-gradient(180deg,#020617_0%,#0f172a_45%,#020617_100%)]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+        <ModuleNav />
+
         <header className="rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl shadow-black/25 backdrop-blur-sm">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <Badge>Gestao de Frotas</Badge>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Painel de Abastecimento</h1>
-              <p className="mt-3 text-sm text-slate-400 sm:text-base">Importe, filtre e acompanhe os indicadores da frota.</p>
+              <Badge>Combustivel</Badge>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Painel de abastecimento
+              </h1>
+              <p className="mt-3 text-sm text-slate-400 sm:text-base">
+                Importe, filtre e acompanhe os indicadores da frota.
+              </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
