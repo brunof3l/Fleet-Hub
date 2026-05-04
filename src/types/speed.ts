@@ -18,6 +18,7 @@ export interface SpeedColumnMap {
   date: string;
   vehicle: string;
   speed: string;
+  time?: string;
   driver?: string;
   address?: string;
 }

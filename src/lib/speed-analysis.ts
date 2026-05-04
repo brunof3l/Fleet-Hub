@@ -104,6 +104,59 @@ function parseDate(value: SpeedCellValue): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function parseTimeParts(value: SpeedCellValue): { hours: number; minutes: number; seconds: number } | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return {
+      hours: value.getHours(),
+      minutes: value.getMinutes(),
+      seconds: value.getSeconds(),
+    };
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const normalized = value >= 1 ? value % 1 : value;
+    const totalSeconds = Math.round(normalized * 24 * 60 * 60);
+
+    return {
+      hours: Math.floor(totalSeconds / 3600) % 24,
+      minutes: Math.floor((totalSeconds % 3600) / 60),
+      seconds: totalSeconds % 60,
+    };
+  }
+
+  const text = cleanText(value);
+  if (!text) {
+    return null;
+  }
+
+  const match = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    hours: Number(match[1]),
+    minutes: Number(match[2]),
+    seconds: Number(match[3] ?? "0"),
+  };
+}
+
+function combineDateAndTime(dateValue: SpeedCellValue, timeValue?: SpeedCellValue): Date | null {
+  const baseDate = parseDate(dateValue);
+  if (!baseDate) {
+    return null;
+  }
+
+  const timeParts = parseTimeParts(timeValue);
+  if (!timeParts) {
+    return baseDate;
+  }
+
+  const combined = new Date(baseDate);
+  combined.setHours(timeParts.hours, timeParts.minutes, timeParts.seconds, 0);
+  return combined;
+}
+
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -112,9 +165,20 @@ function formatDateTime(value: Date): string {
   return `${pad2(value.getDate())}/${pad2(value.getMonth() + 1)}/${value.getFullYear()} ${pad2(value.getHours())}:${pad2(value.getMinutes())}:${pad2(value.getSeconds())}`;
 }
 
-function formatOriginalDate(value: SpeedCellValue, fallback: Date): string {
-  const text = cleanText(value);
-  return text || formatDateTime(fallback);
+function formatDateLabel(dateValue: SpeedCellValue, timeValue: SpeedCellValue | undefined, fallback: Date): string {
+  const dateText = cleanText(dateValue);
+  const timeText = cleanText(timeValue);
+  const dateTextHasTime = /\d{1,2}:\d{2}/.test(dateText);
+
+  if (dateText && timeText && !dateTextHasTime) {
+    return `${dateText} ${timeText}`.trim();
+  }
+
+  if (dateText) {
+    return dateText;
+  }
+
+  return formatDateTime(fallback);
 }
 
 function findColumn(headings: string[], candidates: string[]): string | undefined {
@@ -124,6 +188,7 @@ function findColumn(headings: string[], candidates: string[]): string | undefine
 
 function mapColumns(headings: string[]): SpeedColumnMap | null {
   const date = findColumn(headings, ["Data"]);
+  const time = findColumn(headings, ["Hora", "Horario", "Horário"]);
   const vehicle = findColumn(headings, ["Veiculo", "Veículo"]);
   const speed = findColumn(headings, ["Velocidade"]);
 
@@ -135,6 +200,7 @@ function mapColumns(headings: string[]): SpeedColumnMap | null {
     date,
     vehicle,
     speed,
+    time,
     driver: findColumn(headings, ["Motorista"]),
     address: findColumn(headings, ["Endereco", "Endereço"]),
   };
@@ -164,7 +230,7 @@ function closeBlock(block: SpeedBlock | null, violations: SpeedViolation[]) {
 }
 
 function toReportEntry(row: SpeedSheetRow, columns: SpeedColumnMap): SpeedReportEntry | null {
-  const date = parseDate(row[columns.date]);
+  const date = combineDateAndTime(row[columns.date], columns.time ? row[columns.time] : undefined);
   const speed = parseNumber(row[columns.speed]);
   const vehicle = cleanText(row[columns.vehicle]);
 
@@ -174,7 +240,7 @@ function toReportEntry(row: SpeedSheetRow, columns: SpeedColumnMap): SpeedReport
 
   return {
     date,
-    dateLabel: formatOriginalDate(row[columns.date], date),
+    dateLabel: formatDateLabel(row[columns.date], columns.time ? row[columns.time] : undefined, date),
     vehicle,
     speed,
     driver: columns.driver ? cleanText(row[columns.driver]) || "---" : "---",
