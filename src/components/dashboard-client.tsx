@@ -332,7 +332,7 @@ export default function DashboardClient() {
                 <p className="text-xs uppercase tracking-wide text-slate-500">Ultima importacao</p>
                 <p className="mt-1 text-sm text-slate-300">
                   {lastUpload
-                    ? `${lastUpload.insertedCount} salvos • formato ${lastUpload.detectedFormat}`
+                    ? `${lastUpload.insertedCount} salvos${lastUpload.replacedCount ? ` • ${lastUpload.replacedCount} substituidos` : ""} • formato ${lastUpload.detectedFormat}`
                     : "Nenhuma importacao nesta sessao"}
                 </p>
               </div>

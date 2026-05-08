@@ -50,6 +50,29 @@ function normalizeOptionalNumber(value: unknown): string {
   return Number.isFinite(parsed) ? parsed.toFixed(3) : "0.000";
 }
 
+function normalizeDuplicateText(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+function buildDuplicateKey(values: {
+  date: string;
+  vehicle: string;
+  quantity: number;
+  totalCost: number;
+}) {
+  return [
+    values.date,
+    normalizeDuplicateText(values.vehicle),
+    normalizeOptionalNumber(values.quantity),
+    normalizeOptionalNumber(values.totalCost),
+  ].join("|");
+}
+
 function buildRecordSignature(values: {
   date: string;
   time?: string | null;
@@ -286,6 +309,7 @@ export async function ingestWorkbookToDatabase(fileName: string, buffer: ArrayBu
     return {
       insertedCount: 0,
       skippedCount: 0,
+      replacedCount: 0,
       vehicleCount: 0,
       missingColumns: parsed.missingColumns,
       detectedFormat: parsed.detectedFormat,
@@ -294,11 +318,88 @@ export async function ingestWorkbookToDatabase(fileName: string, buffer: ArrayBu
   }
 
   const sql = getSqlClient();
+  const deduplicatedMap = new Map<string, FuelRecord>();
 
-  if (parsed.records.length) {
-    await sql`
-      insert into abastecimentos ${sql(
-        parsed.records.map((record) => ({
+  parsed.records.forEach((record) => {
+    const duplicateKey = buildDuplicateKey({
+      date: record.date,
+      vehicle: getNormalizedVehicleValue(record) || record.vehicle,
+      quantity: record.quantity,
+      totalCost: record.totalCost,
+    });
+
+    deduplicatedMap.set(duplicateKey, record);
+  });
+
+  const deduplicatedRecords = Array.from(deduplicatedMap.values());
+  const skippedCount = parsed.records.length - deduplicatedRecords.length;
+
+  const dates = deduplicatedRecords.map((record) => record.date).filter(Boolean).sort();
+  const startDate = dates[0];
+  const endDate = dates[dates.length - 1];
+
+  let replacedCount = 0;
+
+  await sql.begin(async (transaction) => {
+    if (startDate && endDate) {
+      const existingRows = await transaction<FuelRowQuery[]>`
+        select
+          id,
+          data::text as data,
+          horario::text as horario,
+          veiculo,
+          apelido,
+          quantidade,
+          medicao,
+          fornecedor,
+          valor_litro,
+          tipo_combustivel,
+          custo_total,
+          medida_percorrida,
+          autonomia_media,
+          observacoes,
+          criado_em::text as criado_em
+        from abastecimentos
+        where data >= ${startDate}
+          and data <= ${endDate}
+      `;
+
+      const duplicateKeys = new Set(deduplicatedRecords.map((record) =>
+        buildDuplicateKey({
+          date: record.date,
+          vehicle: getNormalizedVehicleValue(record) || record.vehicle,
+          quantity: record.quantity,
+          totalCost: record.totalCost,
+        }),
+      ));
+
+      const idsToReplace = existingRows
+        .filter((row) =>
+          duplicateKeys.has(
+            buildDuplicateKey({
+              date: row.data,
+              vehicle: row.veiculo ?? "",
+              quantity: Number(row.quantidade ?? 0),
+              totalCost: Number(row.custo_total ?? 0),
+            }),
+          ),
+        )
+        .map((row) => row.id)
+        .filter((id): id is number => typeof id === "number");
+
+      if (idsToReplace.length) {
+        replacedCount = idsToReplace.length;
+        await transaction`
+          delete from abastecimentos
+          where id in ${transaction(idsToReplace)}
+        `;
+      }
+    }
+
+    if (deduplicatedRecords.length) {
+      await transaction`
+        insert into abastecimentos ${transaction(
+          deduplicatedRecords.map((record) => ({
           data: record.date,
           horario: record.time || null,
           veiculo: getNormalizedVehicleValue(record) || record.vehicle,
@@ -326,17 +427,22 @@ export async function ingestWorkbookToDatabase(fileName: string, buffer: ArrayBu
         "medida_percorrida",
         "autonomia_media",
         "observacoes",
-      )}
-    `;
-  }
+        )}
+      `;
+    }
+  });
 
   return {
-    insertedCount: parsed.records.length,
-    skippedCount: 0,
-    vehicleCount: new Set(parsed.records.map((record) => record.vehicle)).size,
+    insertedCount: deduplicatedRecords.length,
+    skippedCount,
+    replacedCount,
+    vehicleCount: new Set(deduplicatedRecords.map((record) => record.vehicle)).size,
     missingColumns: parsed.missingColumns,
     detectedFormat: parsed.detectedFormat,
-    message: `${parsed.records.length} abastecimentos foram salvos com sucesso.`,
+    message:
+      replacedCount || skippedCount
+        ? `${deduplicatedRecords.length} abastecimentos foram salvos, ${replacedCount} duplicados existentes foram substituidos e ${skippedCount} repeticoes internas foram ignoradas.`
+        : `${deduplicatedRecords.length} abastecimentos foram salvos com sucesso.`,
   };
 }
 

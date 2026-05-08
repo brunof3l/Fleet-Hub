@@ -140,6 +140,7 @@ export interface DashboardSummary {
 export interface UploadResult {
   insertedCount: number;
   skippedCount: number;
+  replacedCount: number;
   vehicleCount: number;
   missingColumns: string[];
   detectedFormat: SourceFormat;
