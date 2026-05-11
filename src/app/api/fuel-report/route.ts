@@ -1,5 +1,5 @@
 import { applyFuelReportFilters, getAllFuelRecords } from "@/lib/fleet-service";
-import { buildDetailedFuelPdfReport } from "@/lib/reporting";
+import { buildDetailedFuelPdfReport } from "@/lib/fuel-pdf-report";
 import type { FuelReportFilters } from "@/types/fuel";
 
 export const runtime = "nodejs";
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao gerar o relatorio em PDF.";
+    console.error("fuel-report error:", error);
     return Response.json({ message }, { status: 500 });
   }
 }
