@@ -1,4 +1,5 @@
 export type SourceFormat = "infleet" | "combustivel-fevereiro" | "desconhecido";
+export type FuelPriceValidationStatus = "CORRETO" | "DIVERGENTE" | "SEM_PARAMETRO";
 
 export type RawFuelRow = Record<string, string | number | boolean | Date | null | undefined>;
 
@@ -18,7 +19,25 @@ export interface FuelRecord {
   autonomy: number;
   sourceFormat: SourceFormat;
   sourceFileName?: string;
+  priceValidationStatus?: FuelPriceValidationStatus;
+  expectedPricePerLiter?: number | null;
+  priceRuleEffectiveFrom?: string | null;
   raw: RawFuelRow;
+}
+
+export interface FuelPriceRule {
+  id: string;
+  supplier: string;
+  fuelType: string;
+  pricePerLiter: number;
+  effectiveFrom: string;
+  createdAt?: string | null;
+}
+
+export interface FuelPriceValidationSummary {
+  validCount: number;
+  divergentCount: number;
+  withoutRuleCount: number;
 }
 
 export interface FuelDbRecord {
@@ -106,6 +125,13 @@ export interface DashboardFilters {
   search: string;
 }
 
+export interface FuelReportFilters {
+  vehicle: string;
+  supplier: string;
+  reportMonth: string;
+  reportDay: string;
+}
+
 export interface DashboardKpis {
   totalCost: number;
   totalLiters: number;
@@ -129,12 +155,15 @@ export interface DashboardSummary {
   message?: string;
   kpis: DashboardKpis;
   records: FuelRecord[];
+  priceRules: FuelPriceRule[];
+  priceValidation: FuelPriceValidationSummary;
   costByVehicle: NamedMetric[];
   litersByVehicle: NamedMetric[];
   monthlyCost: TimelineMetric[];
   monthlyLiters: TimelineMetric[];
   vehicleOptions: string[];
   fuelOptions: string[];
+  supplierOptions: string[];
 }
 
 export interface UploadResult {

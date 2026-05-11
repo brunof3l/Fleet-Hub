@@ -8,6 +8,7 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
+  type FormEvent,
 } from "react";
 import { Download, RefreshCw, Upload } from "lucide-react";
 import {
@@ -30,7 +31,7 @@ import { ModuleNav } from "@/components/module-nav";
 import { Select } from "@/components/ui/select";
 import { Table, TableScroll } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { DashboardFilters, DashboardSummary, UploadResult } from "@/types/fuel";
+import type { DashboardFilters, DashboardSummary, FuelPriceValidationStatus, UploadResult } from "@/types/fuel";
 
 const initialFilters: DashboardFilters = {
   startDate: "",
@@ -49,12 +50,38 @@ const numberFormatter = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 2,
 });
 
+const fuelRuleOptions = ["Gasolina", "Alcool", "Diesel S10", "Arla 32"];
+
 function formatCurrency(value: number): string {
   return currencyFormatter.format(value || 0);
 }
 
 function formatNumber(value: number): string {
   return numberFormatter.format(value || 0);
+}
+
+function getPriceStatusLabel(status?: FuelPriceValidationStatus): string {
+  if (status === "CORRETO") {
+    return "Correto";
+  }
+
+  if (status === "DIVERGENTE") {
+    return "Divergente";
+  }
+
+  return "Sem parametro";
+}
+
+function getPriceStatusStyles(status?: FuelPriceValidationStatus): string {
+  if (status === "CORRETO") {
+    return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+  }
+
+  if (status === "DIVERGENTE") {
+    return "border-rose-400/20 bg-rose-400/10 text-rose-200";
+  }
+
+  return "border-amber-400/20 bg-amber-400/10 text-amber-200";
 }
 
 function formatDateLabel(value: string): string {
@@ -114,8 +141,23 @@ export default function DashboardClient() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSavingRule, setIsSavingRule] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showReportFilters, setShowReportFilters] = useState(false);
   const [status, setStatus] = useState("Carregando dashboard...");
   const [lastUpload, setLastUpload] = useState<UploadResult | null>(null);
+  const [ruleForm, setRuleForm] = useState({
+    supplier: "",
+    fuelType: fuelRuleOptions[0],
+    pricePerLiter: "",
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+  });
+  const [reportFilters, setReportFilters] = useState({
+    vehicle: "todos",
+    supplier: "todos",
+    reportMonth: "",
+    reportDay: "",
+  });
 
   const queryString = useMemo(() => {
     const searchParams = new URLSearchParams();
@@ -248,6 +290,81 @@ export default function DashboardClient() {
     URL.revokeObjectURL(url);
   }, [records]);
 
+  const savePriceRule = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setIsSavingRule(true);
+
+      try {
+        const response = await fetch("/api/fuel-price-rules", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            supplier: ruleForm.supplier,
+            fuelType: ruleForm.fuelType,
+            pricePerLiter: Number(ruleForm.pricePerLiter),
+            effectiveFrom: ruleForm.effectiveFrom,
+          }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.message ?? "Falha ao salvar parametro de preco.");
+        }
+
+        setStatus(payload.message ?? "Parametro de preco salvo.");
+        setRuleForm((current) => ({
+          ...current,
+          pricePerLiter: "",
+        }));
+        await loadDashboard();
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Falha ao salvar parametro.");
+      } finally {
+        setIsSavingRule(false);
+      }
+    },
+    [loadDashboard, ruleForm],
+  );
+
+  const generateDetailedPdfReport = useCallback(async () => {
+    setIsGeneratingReport(true);
+
+    try {
+      const response = await fetch("/api/fuel-report", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(reportFilters),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message ?? "Falha ao gerar relatorio em PDF.");
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const fileNameMatch = disposition.match(/filename="([^"]+)"/);
+      const fileName = fileNameMatch?.[1] ?? "relatorio-combustivel.pdf";
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatus("Relatorio PDF gerado com sucesso.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Falha ao gerar relatorio.");
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }, [reportFilters]);
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.18),_transparent_20%),linear-gradient(180deg,#020617_0%,#0f172a_45%,#020617_100%)]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -269,6 +386,9 @@ export default function DashboardClient() {
               <Button variant="secondary" onClick={() => void loadDashboard()} disabled={isLoading}>
                 <RefreshCw className={cn("mr-2 size-4", isLoading && "animate-spin")} />
                 Atualizar
+              </Button>
+              <Button variant="secondary" onClick={() => setShowReportFilters((current) => !current)}>
+                {showReportFilters ? "Fechar filtros PDF" : "Relatorio PDF"}
               </Button>
               <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                 <Upload className="mr-2 size-4" />
@@ -370,6 +490,107 @@ export default function DashboardClient() {
           />
         </section>
 
+        <section className="grid gap-4 md:grid-cols-3">
+          <KpiCard
+            title="Precos Corretos"
+            value={String(summary?.priceValidation.validCount ?? 0)}
+            subtitle="Lancamentos dentro do parametro vigente"
+          />
+          <KpiCard
+            title="Precos Divergentes"
+            value={String(summary?.priceValidation.divergentCount ?? 0)}
+            subtitle="Lancamentos fora do valor esperado"
+          />
+          <KpiCard
+            title="Sem Parametro"
+            value={String(summary?.priceValidation.withoutRuleCount ?? 0)}
+            subtitle="Lancamentos sem regra de posto e combustivel"
+          />
+        </section>
+
+        {showReportFilters ? (
+          <Card>
+            <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <CardTitle>Relatorio PDF Detalhado</CardTitle>
+                <CardDescription>
+                  Escolha os filtros para gerar um PDF completo com os abastecimentos selecionados.
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setReportFilters({
+                      vehicle: "todos",
+                      supplier: "todos",
+                      reportMonth: "",
+                      reportDay: "",
+                    })
+                  }
+                >
+                  Limpar filtros PDF
+                </Button>
+                <Button onClick={() => void generateDetailedPdfReport()} disabled={isGeneratingReport}>
+                  {isGeneratingReport ? "Gerando PDF..." : "Baixar PDF"}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Select
+                  value={reportFilters.vehicle}
+                  onChange={(event) =>
+                    setReportFilters((current) => ({ ...current, vehicle: event.target.value }))
+                  }
+                >
+                  <option value="todos">Todas as placas / veiculos</option>
+                  {(summary?.vehicleOptions ?? []).map((vehicle) => (
+                    <option key={vehicle} value={vehicle}>
+                      {vehicle}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  value={reportFilters.supplier}
+                  onChange={(event) =>
+                    setReportFilters((current) => ({ ...current, supplier: event.target.value }))
+                  }
+                >
+                  <option value="todos">Todos os postos</option>
+                  {(summary?.supplierOptions ?? []).map((supplier) => (
+                    <option key={supplier} value={supplier}>
+                      {supplier}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  type="month"
+                  value={reportFilters.reportMonth}
+                  onChange={(event) =>
+                    setReportFilters((current) => ({
+                      ...current,
+                      reportMonth: event.target.value,
+                      reportDay: event.target.value ? "" : current.reportDay,
+                    }))
+                  }
+                />
+                <Input
+                  type="date"
+                  value={reportFilters.reportDay}
+                  onChange={(event) =>
+                    setReportFilters((current) => ({
+                      ...current,
+                      reportDay: event.target.value,
+                      reportMonth: event.target.value ? "" : current.reportMonth,
+                    }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -434,6 +655,101 @@ export default function DashboardClient() {
             </div>
           </CardContent>
         </Card>
+
+        <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Parametros de Preco</CardTitle>
+              <CardDescription>
+                Cadastre o valor por posto, combustivel e data de vigencia. Regras novas valem apenas a partir da data informada.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="grid gap-4" onSubmit={savePriceRule}>
+                <Input
+                  placeholder="Nome do posto"
+                  value={ruleForm.supplier}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({ ...current, supplier: event.target.value }))
+                  }
+                />
+                <Select
+                  value={ruleForm.fuelType}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({ ...current, fuelType: event.target.value }))
+                  }
+                >
+                  {fuelRuleOptions.map((fuelType) => (
+                    <option key={fuelType} value={fuelType}>
+                      {fuelType}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  placeholder="Valor do litro"
+                  value={ruleForm.pricePerLiter}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({ ...current, pricePerLiter: event.target.value }))
+                  }
+                />
+                <Input
+                  type="date"
+                  value={ruleForm.effectiveFrom}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({ ...current, effectiveFrom: event.target.value }))
+                  }
+                />
+                <Button type="submit" disabled={isSavingRule}>
+                  {isSavingRule ? "Salvando..." : "Salvar parametro"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Regras Cadastradas</CardTitle>
+              <CardDescription>Historico de vigencia por posto e combustivel.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableScroll>
+                  <table className="min-w-full divide-y divide-white/10 text-sm">
+                    <thead className="sticky top-0 bg-slate-950/95 backdrop-blur-sm">
+                      <tr className="text-left text-slate-400">
+                        <th className="px-4 py-3 font-medium">Posto</th>
+                        <th className="px-4 py-3 font-medium">Combustivel</th>
+                        <th className="px-4 py-3 font-medium">Vigencia</th>
+                        <th className="px-4 py-3 font-medium">Valor/L</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 bg-black/10">
+                      {summary?.priceRules.length ? (
+                        summary.priceRules.map((rule) => (
+                          <tr key={rule.id} className="text-slate-200 transition hover:bg-white/[0.03]">
+                            <td className="px-4 py-3">{rule.supplier}</td>
+                            <td className="whitespace-nowrap px-4 py-3">{rule.fuelType}</td>
+                            <td className="whitespace-nowrap px-4 py-3">{formatDateLabel(rule.effectiveFrom)}</td>
+                            <td className="whitespace-nowrap px-4 py-3">{formatCurrency(rule.pricePerLiter)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                            Nenhum parametro de preco cadastrado ainda.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </TableScroll>
+              </Table>
+            </CardContent>
+          </Card>
+        </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
           <Card>
@@ -600,6 +916,8 @@ export default function DashboardClient() {
                       <th className="px-4 py-3 font-medium">Placa</th>
                       <th className="px-4 py-3 font-medium">Fornecedor</th>
                       <th className="px-4 py-3 font-medium">Combustivel</th>
+                      <th className="px-4 py-3 font-medium">Status Preco</th>
+                      <th className="px-4 py-3 font-medium">Esperado/L</th>
                       <th className="px-4 py-3 font-medium">Quantidade</th>
                       <th className="px-4 py-3 font-medium">Preco/L</th>
                       <th className="px-4 py-3 font-medium">Custo total</th>
@@ -616,6 +934,21 @@ export default function DashboardClient() {
                           </td>
                           <td className="whitespace-nowrap px-4 py-3">{record.supplier}</td>
                           <td className="whitespace-nowrap px-4 py-3">{record.fuelType}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium",
+                                getPriceStatusStyles(record.priceValidationStatus),
+                              )}
+                            >
+                              {getPriceStatusLabel(record.priceValidationStatus)}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {record.expectedPricePerLiter === null || record.expectedPricePerLiter === undefined
+                              ? "-"
+                              : formatCurrency(record.expectedPricePerLiter)}
+                          </td>
                           <td className="whitespace-nowrap px-4 py-3">{formatNumber(record.quantity)} L</td>
                           <td className="whitespace-nowrap px-4 py-3">
                             {formatCurrency(record.pricePerLiter)}
@@ -625,7 +958,7 @@ export default function DashboardClient() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={8} className="px-4 py-14 text-center text-slate-500">
+                        <td colSpan={10} className="px-4 py-14 text-center text-slate-500">
                           Nenhum dado disponivel para os filtros atuais.
                         </td>
                       </tr>
