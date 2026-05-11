@@ -355,8 +355,10 @@ export default function DashboardClient() {
       const link = document.createElement("a");
       link.href = url;
       link.download = fileName;
+      document.body.append(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setStatus("Relatorio PDF gerado com sucesso.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Falha ao gerar relatorio.");

@@ -38,7 +38,7 @@ export async function buildDetailedFuelPdfReport({
   records: FuelRecord[];
   filters: FuelReportFilters;
 }) {
-  const pdfkitModule = await import("pdfkit");
+  const pdfkitModule = await import("pdfkit/js/pdfkit.standalone.js");
   const PDFDocument = pdfkitModule.default;
   const document = new PDFDocument({
     size: "A4",
