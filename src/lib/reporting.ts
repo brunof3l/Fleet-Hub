@@ -1,5 +1,4 @@
 import ExcelJS from "exceljs";
-import PDFDocument from "pdfkit";
 import * as PImage from "pureimage";
 import { Resend } from "resend";
 import { PassThrough } from "stream";
@@ -372,6 +371,8 @@ export async function buildDetailedFuelPdfReport({
   records: FuelRecord[];
   filters: FuelReportFilters;
 }) {
+  const pdfkitModule = await import("pdfkit");
+  const PDFDocument = pdfkitModule.default;
   const document = new PDFDocument({
     size: "A4",
     margin: 40,
