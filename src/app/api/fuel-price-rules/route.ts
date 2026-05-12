@@ -1,4 +1,4 @@
-import { saveFuelPriceRule } from "@/lib/fleet-service";
+import { deleteFuelPriceRule, saveFuelPriceRule } from "@/lib/fleet-service";
 
 export const runtime = "nodejs";
 
@@ -24,6 +24,52 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao salvar parametro de preco.";
+    return Response.json({ message }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const body = (await request.json()) as {
+      id?: string;
+      supplier?: string;
+      fuelType?: string;
+      pricePerLiter?: number;
+      effectiveFrom?: string;
+    };
+
+    const rule = await saveFuelPriceRule({
+      id: body.id,
+      supplier: body.supplier ?? "",
+      fuelType: body.fuelType ?? "",
+      pricePerLiter: Number(body.pricePerLiter ?? 0),
+      effectiveFrom: body.effectiveFrom ?? "",
+    });
+
+    return Response.json({
+      rule,
+      message: "Parametro de preco atualizado com sucesso.",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha ao atualizar parametro de preco.";
+    return Response.json({ message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json()) as {
+      id?: string;
+    };
+
+    const rule = await deleteFuelPriceRule(body.id ?? "");
+
+    return Response.json({
+      rule,
+      message: "Parametro de preco removido com sucesso.",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Falha ao remover parametro de preco.";
     return Response.json({ message }, { status: 500 });
   }
 }

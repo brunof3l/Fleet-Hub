@@ -816,6 +816,7 @@ export function parseWorkbookFile(fileName: string, buffer: ArrayBuffer): ParseW
 }
 
 export async function saveFuelPriceRule(input: {
+  id?: string;
   supplier: string;
   fuelType: string;
   pricePerLiter: number;
@@ -829,35 +830,96 @@ export async function saveFuelPriceRule(input: {
   const fuelType = input.fuelType.trim();
   const effectiveFrom = input.effectiveFrom.trim();
   const pricePerLiter = Number(input.pricePerLiter);
+  const ruleId = input.id ? Number(input.id) : null;
 
   if (!supplier || !fuelType || !effectiveFrom || !Number.isFinite(pricePerLiter) || pricePerLiter <= 0) {
     throw new Error("Preencha posto, combustivel, data de vigencia e valor do litro validos.");
+  }
+
+  if (input.id && (!Number.isInteger(ruleId) || !ruleId || ruleId <= 0)) {
+    throw new Error("Regra de preco invalida para edicao.");
+  }
+
+  await ensureFuelPriceRuleTable();
+
+  const sql = getSqlClient();
+  const rows = ruleId
+    ? await sql<FuelPriceRuleQuery[]>`
+        update parametros_preco_combustivel
+        set
+          fornecedor = ${supplier},
+          fornecedor_chave = ${normalizeSupplierKey(supplier)},
+          tipo_combustivel = ${fuelType},
+          tipo_combustivel_chave = ${normalizeFuelTypeKey(fuelType)},
+          valor_litro = ${pricePerLiter},
+          vigencia_inicio = ${effectiveFrom}
+        where id = ${ruleId}
+        returning
+          id,
+          fornecedor,
+          fornecedor_chave,
+          tipo_combustivel,
+          tipo_combustivel_chave,
+          valor_litro,
+          vigencia_inicio::text as vigencia_inicio,
+          criado_em::text as criado_em
+      `
+    : await sql<FuelPriceRuleQuery[]>`
+        insert into parametros_preco_combustivel (
+          fornecedor,
+          fornecedor_chave,
+          tipo_combustivel,
+          tipo_combustivel_chave,
+          valor_litro,
+          vigencia_inicio
+        ) values (
+          ${supplier},
+          ${normalizeSupplierKey(supplier)},
+          ${fuelType},
+          ${normalizeFuelTypeKey(fuelType)},
+          ${pricePerLiter},
+          ${effectiveFrom}
+        )
+        on conflict (fornecedor_chave, tipo_combustivel_chave, vigencia_inicio)
+        do update set
+          fornecedor = excluded.fornecedor,
+          tipo_combustivel = excluded.tipo_combustivel,
+          valor_litro = excluded.valor_litro
+        returning
+          id,
+          fornecedor,
+          fornecedor_chave,
+          tipo_combustivel,
+          tipo_combustivel_chave,
+          valor_litro,
+          vigencia_inicio::text as vigencia_inicio,
+          criado_em::text as criado_em
+      `;
+
+  if (!rows[0]) {
+    throw new Error("Nao foi possivel salvar o parametro de preco.");
+  }
+
+  return mapPriceRuleRow(rows[0]);
+}
+
+export async function deleteFuelPriceRule(ruleId: string) {
+  if (!hasDatabaseConfig()) {
+    throw new Error("DATABASE_URL nao configurado. Defina a conexao com o Neon antes de remover parametros.");
+  }
+
+  const parsedRuleId = Number(ruleId);
+
+  if (!Number.isInteger(parsedRuleId) || parsedRuleId <= 0) {
+    throw new Error("Regra de preco invalida para exclusao.");
   }
 
   await ensureFuelPriceRuleTable();
 
   const sql = getSqlClient();
   const rows = await sql<FuelPriceRuleQuery[]>`
-    insert into parametros_preco_combustivel (
-      fornecedor,
-      fornecedor_chave,
-      tipo_combustivel,
-      tipo_combustivel_chave,
-      valor_litro,
-      vigencia_inicio
-    ) values (
-      ${supplier},
-      ${normalizeSupplierKey(supplier)},
-      ${fuelType},
-      ${normalizeFuelTypeKey(fuelType)},
-      ${pricePerLiter},
-      ${effectiveFrom}
-    )
-    on conflict (fornecedor_chave, tipo_combustivel_chave, vigencia_inicio)
-    do update set
-      fornecedor = excluded.fornecedor,
-      tipo_combustivel = excluded.tipo_combustivel,
-      valor_litro = excluded.valor_litro
+    delete from parametros_preco_combustivel
+    where id = ${parsedRuleId}
     returning
       id,
       fornecedor,
@@ -870,8 +932,38 @@ export async function saveFuelPriceRule(input: {
   `;
 
   if (!rows[0]) {
-    throw new Error("Nao foi possivel salvar o parametro de preco.");
+    throw new Error("Nao foi possivel localizar a regra de preco para exclusao.");
   }
 
   return mapPriceRuleRow(rows[0]);
+}
+
+export async function deleteFuelRecord(recordId: string) {
+  if (!hasDatabaseConfig()) {
+    throw new Error("DATABASE_URL nao configurado. Defina a conexao com o Neon antes de remover registros.");
+  }
+
+  const normalizedRecordId = recordId.trim();
+  const parsedRecordId = normalizedRecordId.startsWith("db-")
+    ? Number(normalizedRecordId.slice(3))
+    : Number.NaN;
+
+  if (!Number.isInteger(parsedRecordId) || parsedRecordId <= 0) {
+    throw new Error("Registro de abastecimento invalido para exclusao.");
+  }
+
+  const sql = getSqlClient();
+  const rows = await sql<{ id: number }[]>`
+    delete from abastecimentos
+    where id = ${parsedRecordId}
+    returning id
+  `;
+
+  if (!rows[0]) {
+    throw new Error("Nao foi possivel localizar o registro para exclusao.");
+  }
+
+  return {
+    id: `db-${rows[0].id}`,
+  };
 }

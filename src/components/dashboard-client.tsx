@@ -31,7 +31,13 @@ import { ModuleNav } from "@/components/module-nav";
 import { Select } from "@/components/ui/select";
 import { Table, TableScroll } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { DashboardFilters, DashboardSummary, FuelPriceValidationStatus, UploadResult } from "@/types/fuel";
+import type {
+  DashboardFilters,
+  DashboardSummary,
+  FuelPriceRule,
+  FuelPriceValidationStatus,
+  UploadResult,
+} from "@/types/fuel";
 
 const initialFilters: DashboardFilters = {
   startDate: "",
@@ -51,6 +57,13 @@ const numberFormatter = new Intl.NumberFormat("pt-BR", {
 });
 
 const fuelRuleOptions = ["Gasolina", "Alcool", "Diesel S10", "Arla 32"];
+const initialRuleForm = {
+  id: null as string | null,
+  supplier: "",
+  fuelType: fuelRuleOptions[0],
+  pricePerLiter: "",
+  effectiveFrom: new Date().toISOString().slice(0, 10),
+};
 
 function formatCurrency(value: number): string {
   return currencyFormatter.format(value || 0);
@@ -142,16 +155,13 @@ export default function DashboardClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isSavingRule, setIsSavingRule] = useState(false);
+  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showReportFilters, setShowReportFilters] = useState(false);
   const [status, setStatus] = useState("Carregando dashboard...");
   const [lastUpload, setLastUpload] = useState<UploadResult | null>(null);
-  const [ruleForm, setRuleForm] = useState({
-    supplier: "",
-    fuelType: fuelRuleOptions[0],
-    pricePerLiter: "",
-    effectiveFrom: new Date().toISOString().slice(0, 10),
-  });
+  const [ruleForm, setRuleForm] = useState(initialRuleForm);
   const [reportFilters, setReportFilters] = useState({
     vehicle: "todos",
     supplier: "todos",
@@ -297,11 +307,12 @@ export default function DashboardClient() {
 
       try {
         const response = await fetch("/api/fuel-price-rules", {
-          method: "POST",
+          method: ruleForm.id ? "PUT" : "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            id: ruleForm.id,
             supplier: ruleForm.supplier,
             fuelType: ruleForm.fuelType,
             pricePerLiter: Number(ruleForm.pricePerLiter),
@@ -315,11 +326,8 @@ export default function DashboardClient() {
           throw new Error(payload.message ?? "Falha ao salvar parametro de preco.");
         }
 
-        setStatus(payload.message ?? "Parametro de preco salvo.");
-        setRuleForm((current) => ({
-          ...current,
-          pricePerLiter: "",
-        }));
+        setStatus(payload.message ?? (ruleForm.id ? "Parametro de preco atualizado." : "Parametro de preco salvo."));
+        setRuleForm(initialRuleForm);
         await loadDashboard();
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Falha ao salvar parametro.");
@@ -328,6 +336,109 @@ export default function DashboardClient() {
       }
     },
     [loadDashboard, ruleForm],
+  );
+
+  const startEditingPriceRule = useCallback((rule: FuelPriceRule) => {
+    setRuleForm({
+      id: rule.id,
+      supplier: rule.supplier,
+      fuelType: rule.fuelType,
+      pricePerLiter: String(rule.pricePerLiter),
+      effectiveFrom: rule.effectiveFrom,
+    });
+  }, []);
+
+  const cancelEditingPriceRule = useCallback(() => {
+    setRuleForm(initialRuleForm);
+  }, []);
+
+  const removePriceRule = useCallback(
+    async (rule: FuelPriceRule) => {
+      const confirmed = window.confirm(
+        `Remover a regra de ${rule.fuelType} do posto ${rule.supplier} com vigencia em ${formatDateLabel(rule.effectiveFrom)}?`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setDeletingRuleId(rule.id);
+
+      try {
+        const response = await fetch("/api/fuel-price-rules", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: rule.id,
+          }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.message ?? "Falha ao remover parametro de preco.");
+        }
+
+        if (ruleForm.id === rule.id) {
+          setRuleForm(initialRuleForm);
+        }
+
+        setStatus(payload.message ?? "Parametro de preco removido.");
+        await loadDashboard();
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Falha ao remover parametro.");
+      } finally {
+        setDeletingRuleId(null);
+      }
+    },
+    [loadDashboard, ruleForm.id],
+  );
+
+  const removeRecord = useCallback(
+    async (record: (typeof records)[number]) => {
+      if (!record.id.startsWith("db-")) {
+        setStatus("Somente registros salvos no banco podem ser removidos.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Remover o registro de ${record.vehicle} em ${formatDateLabel(record.date)} no posto ${record.supplier}?`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setDeletingRecordId(record.id);
+
+      try {
+        const response = await fetch("/api/fuel-records", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: record.id,
+          }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.message ?? "Falha ao remover registro.");
+        }
+
+        setStatus(payload.message ?? "Registro removido.");
+        await loadDashboard();
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Falha ao remover registro.");
+      } finally {
+        setDeletingRecordId(null);
+      }
+    },
+    [loadDashboard, records],
   );
 
   const generateDetailedPdfReport = useCallback(async () => {
@@ -705,8 +816,13 @@ export default function DashboardClient() {
                   }
                 />
                 <Button type="submit" disabled={isSavingRule}>
-                  {isSavingRule ? "Salvando..." : "Salvar parametro"}
+                  {isSavingRule ? "Salvando..." : ruleForm.id ? "Atualizar parametro" : "Salvar parametro"}
                 </Button>
+                {ruleForm.id ? (
+                  <Button type="button" variant="outline" onClick={cancelEditingPriceRule} disabled={isSavingRule}>
+                    Cancelar edicao
+                  </Button>
+                ) : null}
               </form>
             </CardContent>
           </Card>
@@ -726,6 +842,7 @@ export default function DashboardClient() {
                         <th className="px-4 py-3 font-medium">Combustivel</th>
                         <th className="px-4 py-3 font-medium">Vigencia</th>
                         <th className="px-4 py-3 font-medium">Valor/L</th>
+                        <th className="px-4 py-3 font-medium text-right">Acoes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 bg-black/10">
@@ -736,11 +853,34 @@ export default function DashboardClient() {
                             <td className="whitespace-nowrap px-4 py-3">{rule.fuelType}</td>
                             <td className="whitespace-nowrap px-4 py-3">{formatDateLabel(rule.effectiveFrom)}</td>
                             <td className="whitespace-nowrap px-4 py-3">{formatCurrency(rule.pricePerLiter)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => startEditingPriceRule(rule)}
+                                  disabled={isSavingRule || deletingRuleId === rule.id}
+                                >
+                                  Editar
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void removePriceRule(rule)}
+                                  disabled={deletingRuleId === rule.id || isSavingRule}
+                                  className="border-rose-500/30 text-rose-200 hover:bg-rose-500/10 hover:text-rose-100"
+                                >
+                                  {deletingRuleId === rule.id ? "Removendo..." : "Remover"}
+                                </Button>
+                              </div>
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                          <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                             Nenhum parametro de preco cadastrado ainda.
                           </td>
                         </tr>
@@ -923,6 +1063,7 @@ export default function DashboardClient() {
                       <th className="px-4 py-3 font-medium">Quantidade</th>
                       <th className="px-4 py-3 font-medium">Preco/L</th>
                       <th className="px-4 py-3 font-medium">Custo total</th>
+                      <th className="px-4 py-3 font-medium text-right">Acoes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 bg-black/10">
@@ -956,11 +1097,25 @@ export default function DashboardClient() {
                             {formatCurrency(record.pricePerLiter)}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3">{formatCurrency(record.totalCost)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex justify-end">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void removeRecord(record)}
+                                disabled={!record.id.startsWith("db-") || deletingRecordId === record.id}
+                                className="border-rose-500/30 text-rose-200 hover:bg-rose-500/10 hover:text-rose-100 disabled:border-white/10 disabled:text-slate-500"
+                              >
+                                {deletingRecordId === record.id ? "Removendo..." : "Remover"}
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={10} className="px-4 py-14 text-center text-slate-500">
+                        <td colSpan={11} className="px-4 py-14 text-center text-slate-500">
                           Nenhum dado disponivel para os filtros atuais.
                         </td>
                       </tr>
