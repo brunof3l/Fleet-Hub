@@ -438,7 +438,7 @@ export default function DashboardClient() {
         setDeletingRecordId(null);
       }
     },
-    [loadDashboard, records],
+    [loadDashboard],
   );
 
   const generateDetailedPdfReport = useCallback(async () => {

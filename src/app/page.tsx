@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Fuel, Gauge } from "lucide-react";
+import { BarChart3, Fuel, Gauge, Truck } from "lucide-react";
 
 import { ModuleNav } from "@/components/module-nav";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const modules = [
+  {
+    href: "/frota",
+    title: "Frota",
+    description: "Base oficial dos veiculos, CRLV em PDF e alertas de licenciamento.",
+    icon: Truck,
+  },
   {
     href: "/combustivel",
     title: "Combustivel",
@@ -33,8 +39,8 @@ export default function Home() {
             Central unificada da frota
           </h1>
           <p className="mt-3 max-w-3xl text-sm text-slate-400 sm:text-base">
-            Escolha o modulo para analisar abastecimento ou velocidade, mantendo a mesma base visual
-            e o mesmo contexto operacional.
+              Escolha o modulo para gerir os veiculos, analisar abastecimento e acompanhar
+              velocidade mantendo a mesma base visual e o mesmo contexto operacional.
           </p>
         </header>
 
@@ -42,9 +48,9 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle>Modulos Integrados</CardTitle>
-              <CardDescription>Os dois fluxos trabalham no mesmo painel.</CardDescription>
+            <CardDescription>Os tres fluxos trabalham no mesmo painel.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
+          <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {modules.map((module) => {
                 const Icon = module.icon;
 
@@ -72,7 +78,7 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle>Como se comunicam</CardTitle>
-              <CardDescription>Velocidade aproveita o contexto da base de combustivel.</CardDescription>
+              <CardDescription>Frota centraliza a base oficial para os demais modulos.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -81,8 +87,18 @@ export default function Home() {
                   <span className="font-medium">Mesma frota</span>
                 </div>
                 <p className="mt-2 text-sm text-slate-400">
-                  O modulo de velocidade cruza os veiculos do relatorio com os veiculos existentes no
-                  modulo de combustivel.
+                  O modulo de velocidade cruza os veiculos do relatorio com a base oficial cadastrada
+                  na gestao de frota.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="flex items-center gap-2 text-white">
+                  <Truck className="size-4 text-sky-300" />
+                  <span className="font-medium">Gestao de Frota</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-400">
+                  Guarda placa, chassi, renavam, litragem, licenciamento e o PDF do CRLV de cada
+                  veiculo.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">

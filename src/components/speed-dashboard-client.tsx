@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableScroll } from "@/components/ui/table";
 import { analyzeSpeedWorkbook, buildViolationExportRows, normalizeVehicleKey } from "@/lib/speed-analysis";
 import { cn } from "@/lib/utils";
-import type { DashboardSummary } from "@/types/fuel";
+import type { FleetOverview } from "@/types/fleet";
 import type { SpeedViolation } from "@/types/speed";
 import { ModuleNav } from "./module-nav";
 
@@ -46,6 +46,7 @@ export default function SpeedDashboardClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [violations, setViolations] = useState<SpeedViolation[]>([]);
   const [knownVehicles, setKnownVehicles] = useState<string[]>([]);
+  const [fleetVehicleCount, setFleetVehicleCount] = useState(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sheetName, setSheetName] = useState<string | null>(null);
   const [status, setStatus] = useState("Carregue um relatorio de velocidade para iniciar.");
@@ -61,18 +62,22 @@ export default function SpeedDashboardClient() {
       setIsLoadingFleet(true);
 
       try {
-        const response = await fetch("/api/dashboard", { cache: "no-store" });
-        const payload = (await response.json()) as DashboardSummary;
+        const response = await fetch("/api/fleet", { cache: "no-store" });
+        const payload = (await response.json()) as FleetOverview;
 
         if (!response.ok) {
-          throw new Error(payload.message ?? "Falha ao carregar a frota do modulo de combustivel.");
+          throw new Error(payload.message ?? "Falha ao carregar a base oficial da frota.");
         }
 
         if (isMounted) {
-          setKnownVehicles(payload.vehicleOptions ?? []);
+          setFleetVehicleCount(payload.totalVehicles ?? 0);
+          setKnownVehicles(
+            Array.from(new Set(payload.vehicles.flatMap((vehicle) => [vehicle.plate, vehicle.brandModel]))),
+          );
         }
       } catch {
         if (isMounted) {
+          setFleetVehicleCount(0);
           setKnownVehicles([]);
         }
       } finally {
@@ -208,7 +213,7 @@ export default function SpeedDashboardClient() {
               </h1>
               <p className="mt-3 text-sm text-slate-400 sm:text-base">
                 Leia relatorios XLSX, detecte eventos acima de 130 km/h e cruze os veiculos com a
-                base de combustivel.
+                base oficial da frota.
               </p>
             </div>
 
@@ -262,7 +267,7 @@ export default function SpeedDashboardClient() {
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Conexao com Combustivel</CardTitle>
+                  <CardTitle>Conexao com Frota</CardTitle>
                   <CardDescription>Cruzamento automatico com a base da frota.</CardDescription>
                 </div>
                 <Badge variant="secondary">{isLoadingFleet ? "Sincronizando" : "Ativo"}</Badge>
@@ -270,8 +275,8 @@ export default function SpeedDashboardClient() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Veiculos no modulo de combustivel</p>
-                <p className="mt-1 text-xl font-semibold text-white">{knownVehicles.length}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Registros na base de frota</p>
+                <p className="mt-1 text-xl font-semibold text-white">{fleetVehicleCount}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Veiculos vinculados</p>
@@ -304,7 +309,7 @@ export default function SpeedDashboardClient() {
             subtitle="Pico encontrado no relatorio"
           />
           <KpiCard
-            title="Vinculados a Combustivel"
+            title="Vinculados a Frota"
             value={String(vehicleSummary.linkedVehicles.length)}
             subtitle="Veiculos encontrados na base atual"
           />
@@ -315,7 +320,7 @@ export default function SpeedDashboardClient() {
             <CardHeader>
               <CardTitle>Veiculos sem vinculo</CardTitle>
               <CardDescription>
-                Estes veiculos apareceram no relatorio de velocidade, mas nao foram encontrados na base de combustivel.
+                Estes veiculos apareceram no relatorio de velocidade, mas nao foram encontrados na base oficial da frota.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
@@ -363,7 +368,7 @@ export default function SpeedDashboardClient() {
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <Link2 className="size-4" />
-                    {vehicleSummary.linkedVehicles.length} veiculos vinculados com combustivel
+                    {vehicleSummary.linkedVehicles.length} veiculos vinculados com a frota
                   </span>
                 </div>
               </div>

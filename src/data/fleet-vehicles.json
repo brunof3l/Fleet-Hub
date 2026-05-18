@@ -1,0 +1,234 @@
+[
+  {
+    "placa": "FKS2E93",
+    "chassi": "93YRBB003LJ281335",
+    "renavam": "01222897641",
+    "marca_modelo": "RENAULT/KWID ZEN 10MT",
+    "ano_fabricacao_modelo": "2019/2020",
+    "capacidade_litragem": 38
+  },
+  {
+    "placa": "RNI2G68",
+    "chassi": "9BD341ACXNY761833",
+    "renavam": "01270049698",
+    "marca_modelo": "FIAT/MOBI LIKE",
+    "ano_fabricacao_modelo": "2021/2022",
+    "capacidade_litragem": 47
+  },
+  {
+    "placa": "FWX1C33",
+    "chassi": "9A9A03310M0BE7282",
+    "renavam": "01251767980",
+    "marca_modelo": "REB/ANGOLA AWA",
+    "ano_fabricacao_modelo": "2020/2021",
+    "capacidade_litragem": 0
+  },
+  {
+    "placa": "PTL2J61",
+    "chassi": "93YMAFEXCKJ601142",
+    "renavam": "01186402722",
+    "marca_modelo": "RENAULT/MASTER MARIMAR A",
+    "ano_fabricacao_modelo": "2018/2019",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "EJZ5H06",
+    "chassi": "93W245G34C2087968",
+    "renavam": "00452296447",
+    "marca_modelo": "FIAT/DUCATO MAXICARGO",
+    "ano_fabricacao_modelo": "2011/2012",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "TKI4B86",
+    "chassi": "93YF62S04TJ244055",
+    "renavam": "01449713014",
+    "marca_modelo": "RENAULT/MASTER PL2 NVA A",
+    "ano_fabricacao_modelo": "2025/2026",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "RWH9B88",
+    "chassi": "9C2KD0810PR095925",
+    "renavam": "01350009706",
+    "marca_modelo": "HONDA/NXR160 BROS ESDD",
+    "ano_fabricacao_modelo": "2023",
+    "capacidade_litragem": 12
+  },
+  {
+    "placa": "SWU8E25",
+    "chassi": "93YF62006SJ929076",
+    "renavam": "01386114470",
+    "marca_modelo": "RENAULT/MASTER L2 STOP A",
+    "ano_fabricacao_modelo": "2024/2025",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "RWI7C85",
+    "chassi": "93YRBB009RJ651373",
+    "renavam": "01363123278",
+    "marca_modelo": "RENAULT/KWID ZEN 2",
+    "ano_fabricacao_modelo": "2023/2024",
+    "capacidade_litragem": 38
+  },
+  {
+    "placa": "QAZ9G78",
+    "chassi": "8AC907643NE198700",
+    "renavam": "01265536527",
+    "marca_modelo": "I/M.BENZ 416 PORTO AMB",
+    "ano_fabricacao_modelo": "2021/2022",
+    "capacidade_litragem": 71
+  },
+  {
+    "placa": "QAO5964",
+    "chassi": "93YMAFEXCKJ757853",
+    "renavam": "01186383051",
+    "marca_modelo": "RENAULT/M NIKS AMBULANCI",
+    "ano_fabricacao_modelo": "2018/2019",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "SMF8F77",
+    "chassi": "WF0GTTBG7SU017078",
+    "renavam": "01431172380",
+    "marca_modelo": "I/FORD TRANSIT 410 B AT",
+    "ano_fabricacao_modelo": "2024/2025",
+    "capacidade_litragem": 71
+  },
+  {
+    "placa": "RWC1H54",
+    "chassi": "93YF62000PJ260312",
+    "renavam": "01300641263",
+    "marca_modelo": "RENAULT/MASTER NIKS AMB2",
+    "ano_fabricacao_modelo": "2022/2023",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "GDW2B34",
+    "chassi": "93YMAFEXCNJ973617",
+    "renavam": "01283078438",
+    "marca_modelo": "RENAULT/MASTER NIKS AMB2",
+    "ano_fabricacao_modelo": "2021/2022",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "EZZ4E96",
+    "chassi": "WF0BTTVD8NU000273",
+    "renavam": "01330907148",
+    "marca_modelo": "I/FORD TRANSIT GCASA A2",
+    "ano_fabricacao_modelo": "2021/2022",
+    "capacidade_litragem": 71
+  },
+  {
+    "placa": "RWH3B64",
+    "chassi": "9V7VBYHVEPA005431",
+    "renavam": "01346221461",
+    "marca_modelo": "I/CITROEN JUMPY CARGO",
+    "ano_fabricacao_modelo": "2022/2023",
+    "capacidade_litragem": 69
+  },
+  {
+    "placa": "PRW2A74",
+    "chassi": "9BG144DK0KC410480",
+    "renavam": "01156351690",
+    "marca_modelo": "CHEVROLET/S10 LS DS4",
+    "ano_fabricacao_modelo": "2018/2019",
+    "capacidade_litragem": 76
+  },
+  {
+    "placa": "SMI4J82",
+    "chassi": "8AJDA8CB6S8100133",
+    "renavam": "01453218880",
+    "marca_modelo": "I/TOYOTA HILUX CSLSTM4FD",
+    "ano_fabricacao_modelo": "2025",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "HTF6H36",
+    "chassi": "9BD15844AA6258392",
+    "renavam": "00129285510",
+    "marca_modelo": "FIAT/UNO MILLE WAY ECON",
+    "ano_fabricacao_modelo": "2009/2010",
+    "capacidade_litragem": 48
+  },
+  {
+    "placa": "PTL3H19",
+    "chassi": "93YMAFEXCKJ601141",
+    "renavam": "01189924991",
+    "marca_modelo": "RENAULT/MASTER MARIMAR A",
+    "ano_fabricacao_modelo": "2018/2019",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "GDW8H01",
+    "chassi": "93YF62003RJ559974",
+    "renavam": "01338835642",
+    "marca_modelo": "RENAULT/MASTER NIKS AMB2",
+    "ano_fabricacao_modelo": "2023/2024",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "QAR4536",
+    "chassi": "8AC906633KE174110",
+    "renavam": "01208942775",
+    "marca_modelo": "I/M.BENZ 415 ALLTECH AMB",
+    "ano_fabricacao_modelo": "2019/2019",
+    "capacidade_litragem": 71
+  },
+  {
+    "placa": "RSB6I43",
+    "chassi": "93XLJKL1TNCM40475",
+    "renavam": "01263923841",
+    "marca_modelo": "MMC/L200 TRITON SPO GL",
+    "ano_fabricacao_modelo": "2021/2022",
+    "capacidade_litragem": 75
+  },
+  {
+    "placa": "SME9A63",
+    "chassi": "LGXCE4CC7S0029223",
+    "renavam": "01434784158",
+    "marca_modelo": "I/BYD DOLPHIN MINI GS5EV",
+    "ano_fabricacao_modelo": "2024/2025",
+    "capacidade_litragem": 0
+  },
+  {
+    "placa": "RND4B72",
+    "chassi": "9BWKB45U4NP014221",
+    "renavam": "01265683090",
+    "marca_modelo": "VW/NOVA SAVEIRO RB MBVS",
+    "ano_fabricacao_modelo": "2021/2022",
+    "capacidade_litragem": 55
+  },
+  {
+    "placa": "SMA2G31",
+    "chassi": "93YF62002SJ905390",
+    "renavam": "01392606400",
+    "marca_modelo": "RENAULT/MASTER NIKS AMB2",
+    "ano_fabricacao_modelo": "2024/2025",
+    "capacidade_litragem": 80
+  },
+  {
+    "placa": "SMH2J55",
+    "chassi": "9BGEA48H0SG282095",
+    "renavam": "01443946149",
+    "marca_modelo": "CHEV/ONIX 10TAT HB",
+    "ano_fabricacao_modelo": "2025/2025",
+    "capacidade_litragem": 44
+  },
+  {
+    "placa": "GCW5C63",
+    "chassi": "8AC907643PE229144",
+    "renavam": "01338769127",
+    "marca_modelo": "I/M.BENZ 417 NIKS AMB",
+    "ano_fabricacao_modelo": "2022/2023",
+    "capacidade_litragem": 71
+  },
+  {
+    "placa": "PRU2F44",
+    "chassi": "9BG144DK0KC409044",
+    "renavam": "01155698956",
+    "marca_modelo": "CHEVROLET/S10 LS DS4",
+    "ano_fabricacao_modelo": "2018/2019",
+    "capacidade_litragem": 76
+  }
+]

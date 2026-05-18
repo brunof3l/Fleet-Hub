@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/", label: "Inicio" },
+  { href: "/frota", label: "Frota" },
   { href: "/combustivel", label: "Combustivel" },
   { href: "/velocidade", label: "Velocidade" },
 ];
@@ -18,7 +19,7 @@ export function ModuleNav() {
     <nav className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-slate-950/60 p-4 shadow-xl shadow-black/20 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="text-xs uppercase tracking-[0.24em] text-emerald-300">Fleet Hub</p>
-        <h2 className="mt-1 text-lg font-semibold text-white">Combustivel e Velocidade</h2>
+        <h2 className="mt-1 text-lg font-semibold text-white">Frota, Combustivel e Velocidade</h2>
       </div>
 
       <div className="flex flex-wrap gap-2">
