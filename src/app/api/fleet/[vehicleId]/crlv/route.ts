@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server";
+
 import { saveFleetVehicleCrlv } from "@/lib/fleet-management-service";
 
 export const runtime = "nodejs";
@@ -8,17 +10,27 @@ export async function POST(
   { params }: { params: { vehicleId: string } },
 ) {
   try {
+    // #region debug-point B:route-formdata-start
+    console.log("A iniciar rececao do FormData...");
+    // #endregion
     const formData = await request.formData();
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
-      return Response.json({ message: "Envie um arquivo PDF no campo 'file'." }, { status: 400 });
+      return NextResponse.json({ error: "Envie um arquivo PDF no campo 'file'." }, { status: 400 });
     }
 
+    // #region debug-point B:route-file-received
+    console.log("Ficheiro recebido:", file.name, file.size);
+    // #endregion
+
     const result = await saveFleetVehicleCrlv(params.vehicleId, file);
-    return Response.json(result);
+    return NextResponse.json(result);
   } catch (error) {
+    // #region debug-point E:route-error
+    console.error("ERRO DETETADO:", error);
+    // #endregion
     const message = error instanceof Error ? error.message : "Falha ao anexar o CRLV.";
-    return Response.json({ message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
