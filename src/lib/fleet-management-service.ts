@@ -1,6 +1,4 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
-
+import { put } from "@vercel/blob";
 import * as XLSX from "xlsx";
 
 import fleetSeedVehiclesJson from "@/data/fleet-vehicles.json";
@@ -49,8 +47,6 @@ const LICENSING_MONTH_LABELS: Record<number, string> = {
   9: "Setembro",
   10: "Outubro",
 };
-const CRLV_UPLOAD_DIRECTORY = path.join(process.cwd(), "public", "uploads", "crlv");
-const CRLV_PUBLIC_PREFIX = "/uploads/crlv";
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const FLEET_IMPORT_HEADER_ALIASES = {
   plate: ["placa", "placa veiculo", "placa do veiculo", "veiculo", "veículo", "frota"],
@@ -371,15 +367,33 @@ function buildFleetOverview(vehicles: FleetVehicle[], message?: string): FleetOv
 }
 
 function sanitizeFileName(fileName: string): string {
-  const extension = path.extname(fileName).toLowerCase();
-  const baseName = path.basename(fileName, extension).replace(/[^a-zA-Z0-9-_]+/g, "-");
+  const trimmed = String(fileName ?? "").trim();
+  const extensionMatch = trimmed.match(/(\.[a-zA-Z0-9]+)$/);
+  const extension = extensionMatch?.[1]?.toLowerCase() ?? ".pdf";
+  const baseName = trimmed
+    .replace(/(\.[a-zA-Z0-9]+)$/, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-");
   const safeBaseName = baseName.replace(/-+/g, "-").replace(/^-|-$/g, "") || "crlv";
-  return `${safeBaseName}${extension || ".pdf"}`;
+  return `${safeBaseName}${extension}`;
 }
 
-function getAbsoluteFilePathFromPublicPath(publicPath: string): string {
-  const relativePath = publicPath.replace(/^\//, "").split("/").join(path.sep);
-  return path.join(process.cwd(), "public", relativePath);
+function getBlobToken(): string {
+  const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+
+  if (!token) {
+    throw new Error(
+      "BLOB_READ_WRITE_TOKEN nao configurado. Configure o token do Vercel Blob antes de enviar CRLVs.",
+    );
+  }
+
+  return token;
+}
+
+function buildFleetCrlvBlobPath(plate: string, originalFileName: string): string {
+  const safeFileName = sanitizeFileName(originalFileName);
+  const safePlate = plate.replace(/[^A-Z0-9-]+/g, "");
+
+  return `fleet/crlv/${safePlate}/${Date.now()}-${safeFileName}`;
 }
 
 function assertValidVehicleId(vehicleId: string): number {
@@ -749,29 +763,18 @@ export async function saveFleetVehicleCrlv(
     throw new Error("Veiculo da frota nao encontrado para anexar o CRLV.");
   }
 
-  await mkdir(CRLV_UPLOAD_DIRECTORY, { recursive: true });
-
-  const sanitizedOriginalName = sanitizeFileName(file.name);
-  const storedFileName = `${currentVehicle.placa}-${Date.now()}-${sanitizedOriginalName}`;
-  const publicPath = `${CRLV_PUBLIC_PREFIX}/${storedFileName}`;
-  const absolutePath = path.join(CRLV_UPLOAD_DIRECTORY, storedFileName);
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  await writeFile(absolutePath, buffer);
-
-  if (currentVehicle.caminho_crlv_pdf && currentVehicle.caminho_crlv_pdf.startsWith(CRLV_PUBLIC_PREFIX)) {
-    const previousAbsolutePath = getAbsoluteFilePathFromPublicPath(currentVehicle.caminho_crlv_pdf);
-
-    if (previousAbsolutePath !== absolutePath) {
-      await unlink(previousAbsolutePath).catch(() => undefined);
-    }
-  }
+  const blob = await put(buildFleetCrlvBlobPath(currentVehicle.placa, file.name), file, {
+    access: "public",
+    contentType: "application/pdf",
+    addRandomSuffix: false,
+    token: getBlobToken(),
+  });
 
   const sql = getSqlClient();
   await sql`
     update frota_veiculos
     set
-      caminho_crlv_pdf = ${publicPath},
+      caminho_crlv_pdf = ${blob.url},
       crlv_nome_arquivo = ${file.name},
       atualizado_em = now()
     where id = ${parsedVehicleId}
@@ -782,28 +785,5 @@ export async function saveFleetVehicleCrlv(
   return {
     vehicle: updatedVehicle,
     message: `CRLV de ${updatedVehicle.plate} enviado com sucesso.`,
-  };
-}
-
-export async function getFleetVehicleCrlvDownload(vehicleId: string) {
-  if (!hasDatabaseConfig()) {
-    throw new Error("DATABASE_URL nao configurado. Defina a conexao com o Neon antes de baixar CRLVs.");
-  }
-
-  await ensureFleetVehicleTable();
-
-  const vehicle = await getFleetVehicleById(vehicleId);
-
-  if (!vehicle.crlvPdfPath) {
-    throw new Error("Este veiculo ainda nao possui CRLV anexado.");
-  }
-
-  const fileBuffer = await readFile(getAbsoluteFilePathFromPublicPath(vehicle.crlvPdfPath));
-  const downloadName = vehicle.crlvFileName || `${vehicle.plate}-crlv.pdf`;
-
-  return {
-    fileBuffer,
-    downloadName,
-    contentType: "application/pdf",
   };
 }

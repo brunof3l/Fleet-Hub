@@ -1,26 +1,7 @@
-import { getFleetVehicleCrlvDownload, saveFleetVehicleCrlv } from "@/lib/fleet-management-service";
+import { saveFleetVehicleCrlv } from "@/lib/fleet-management-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-export async function GET(
-  _request: Request,
-  { params }: { params: { vehicleId: string } },
-) {
-  try {
-    const file = await getFleetVehicleCrlvDownload(params.vehicleId);
-
-    return new Response(file.fileBuffer, {
-      headers: {
-        "Content-Type": file.contentType,
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(file.downloadName)}"`,
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Falha ao baixar o CRLV.";
-    return Response.json({ message }, { status: 500 });
-  }
-}
 
 export async function POST(
   request: Request,

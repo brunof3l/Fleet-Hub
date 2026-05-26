@@ -247,10 +247,6 @@ export default function FleetDashboardClient() {
     }
   }
 
-  const openDownload = useCallback((vehicle: FleetVehicle) => {
-    window.open(`/api/fleet/${vehicle.id}/crlv`, "_blank", "noopener,noreferrer");
-  }, []);
-
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.16),_transparent_18%),linear-gradient(180deg,#020617_0%,#0f172a_45%,#020617_100%)]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -602,14 +598,19 @@ export default function FleetDashboardClient() {
                         <FileUp className="mr-2 size-4" />
                         {selectedVehicle.hasCrlv ? "Substituir PDF" : "Anexar PDF"}
                       </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => openDownload(selectedVehicle)}
-                        disabled={!selectedVehicle.hasCrlv}
-                      >
-                        <Download className="mr-2 size-4" />
-                        Baixar CRLV
-                      </Button>
+                      {selectedVehicle.crlvPdfPath ? (
+                        <Button variant="outline" asChild>
+                          <a href={selectedVehicle.crlvPdfPath} target="_blank" rel="noreferrer">
+                            <Download className="mr-2 size-4" />
+                            Ver CRLV
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button variant="outline" disabled>
+                          <Download className="mr-2 size-4" />
+                          Ver CRLV
+                        </Button>
+                      )}
                     </div>
                     <p className="mt-3 text-sm text-slate-400">
                       {selectedVehicle.hasCrlv
