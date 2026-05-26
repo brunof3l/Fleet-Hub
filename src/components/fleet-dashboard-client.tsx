@@ -171,19 +171,42 @@ export default function FleetDashboardClient() {
         const formData = new FormData();
         formData.append("file", file);
 
+        // #region debug-point A:frontend-upload-request
+        console.log("[DEBUG] A preparar envio do CRLV...", {
+          vehicleId: selectedVehicle.id,
+          plate: selectedVehicle.plate,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          usesFormData: true,
+          manuallyDefinedContentTypeHeader: false,
+        });
+        // #endregion
+
         const response = await fetch(`/api/fleet/${selectedVehicle.id}/crlv`, {
           method: "POST",
           body: formData,
         });
         const payload = await response.json();
 
+        // #region debug-point E:frontend-upload-response
+        console.log("[DEBUG] Resposta do upload de CRLV recebida.", {
+          status: response.status,
+          ok: response.ok,
+          payload,
+        });
+        // #endregion
+
         if (!response.ok) {
-          throw new Error(payload.message ?? "Falha ao anexar o CRLV.");
+          throw new Error(payload.error ?? payload.message ?? "Falha ao anexar o CRLV.");
         }
 
         setStatus(payload.message ?? "CRLV anexado com sucesso.");
         await loadFleetOverview();
       } catch (error) {
+        // #region debug-point E:frontend-upload-error
+        console.error("[DEBUG] Falha no upload de CRLV.", error);
+        // #endregion
         setStatus(error instanceof Error ? error.message : "Falha ao anexar o CRLV.");
       } finally {
         setIsUploading(false);

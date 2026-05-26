@@ -763,14 +763,27 @@ export async function saveFleetVehicleCrlv(
     throw new Error("Veiculo da frota nao encontrado para anexar o CRLV.");
   }
 
+  // #region debug-point C:blob-upload-start
+  console.log("A enviar para o Vercel Blob...");
+  // #endregion
   const blob = await put(buildFleetCrlvBlobPath(currentVehicle.placa, file.name), file, {
     access: "public",
     contentType: "application/pdf",
     addRandomSuffix: false,
     token: getBlobToken(),
   });
+  // #region debug-point C:blob-upload-result
+  console.log("URL gerado pelo Blob:", blob.url);
+  // #endregion
 
   const sql = getSqlClient();
+  // #region debug-point D:db-update-start
+  console.log("A iniciar atualizacao no Neon...", {
+    vehicleId: parsedVehicleId,
+    plate: currentVehicle.placa,
+    crlvUrl: blob.url,
+  });
+  // #endregion
   await sql`
     update frota_veiculos
     set
@@ -779,6 +792,12 @@ export async function saveFleetVehicleCrlv(
       atualizado_em = now()
     where id = ${parsedVehicleId}
   `;
+  // #region debug-point D:db-update-end
+  console.log("Atualizacao no Neon concluida.", {
+    vehicleId: parsedVehicleId,
+    plate: currentVehicle.placa,
+  });
+  // #endregion
 
   const updatedVehicle = await getFleetVehicleById(vehicleId);
 
