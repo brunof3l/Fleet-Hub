@@ -14,6 +14,8 @@ export interface FleetVehicle {
   renavam: string;
   brandModel: string;
   manufacturingModelYear: string;
+  location: string | null;
+  insuranceStatus: string | null;
   tankCapacityLiters: number;
   licensingDueMonth: number;
   licensingDueMonthLabel: string;
@@ -46,6 +48,7 @@ export interface FleetOverview {
   alerts: FleetLicensingAlert[];
   vehicles: FleetVehicle[];
   vehicleOptions: string[];
+  locationOptions: string[];
 }
 
 export interface FleetSeedResult {
@@ -57,5 +60,14 @@ export interface FleetSeedResult {
 
 export interface FleetDocumentUploadResult {
   vehicle: FleetVehicle;
+  message: string;
+}
+
+export interface FleetImportResult {
+  insertedCount: number;
+  skippedCount: number;
+  updatedCount: number;
+  processedRows: number;
+  sheetsProcessed: string[];
   message: string;
 }

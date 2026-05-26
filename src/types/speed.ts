@@ -12,6 +12,7 @@ export interface SpeedViolation {
   endLabel: string;
   durationMinutes: string;
   maxSpeed: number;
+  location?: string | null;
 }
 
 export interface SpeedColumnMap {
@@ -48,4 +49,43 @@ export interface SpeedAnalysisResult {
   sheetName: string | null;
   fileName: string;
   error?: string;
+}
+
+export interface SpeedDashboardTopOffender {
+  vehicle: string;
+  location: string | null;
+  count: number;
+}
+
+export interface SpeedDashboardLocationMetric {
+  location: string;
+  count: number;
+}
+
+export interface SpeedDashboardSummary {
+  totalAlertsCurrentMonth: number;
+  highestSpeed: number;
+  highestSpeedVehicle: string | null;
+  highestSpeedLocation: string | null;
+  topLocation: string | null;
+  topLocationCount: number;
+}
+
+export interface SpeedDashboardData {
+  summary: SpeedDashboardSummary;
+  topOffenders: SpeedDashboardTopOffender[];
+  violationsByLocation: SpeedDashboardLocationMetric[];
+}
+
+export interface SpeedDashboardViolationPayload {
+  vehicle: string;
+  driver: string;
+  address: string;
+  startDate: string;
+  startLabel: string;
+  endDate: string;
+  endLabel: string;
+  durationMinutes: string;
+  maxSpeed: number;
+  location?: string | null;
 }

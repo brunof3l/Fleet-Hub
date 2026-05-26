@@ -8,7 +8,16 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
-import { AlertTriangle, Download, FileUp, RefreshCw, ShieldAlert, Truck, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  FileSpreadsheet,
+  FileUp,
+  RefreshCw,
+  ShieldAlert,
+  Truck,
+  Upload,
+} from "lucide-react";
 
 import { ModuleNav } from "@/components/module-nav";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +26,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableScroll } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import type { FleetOverview, FleetSeedResult, FleetVehicle } from "@/types/fleet";
+import type { FleetImportResult, FleetOverview, FleetSeedResult, FleetVehicle } from "@/types/fleet";
+
 
 function formatDateLabel(value: string): string {
   if (!value) {
@@ -48,7 +58,8 @@ function KpiCard({
 }
 
 export default function FleetDashboardClient() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const crlvInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [overview, setOverview] = useState<FleetOverview | null>(null);
   const [search, setSearch] = useState("");
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
@@ -56,6 +67,8 @@ export default function FleetDashboardClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [lastImport, setLastImport] = useState<FleetImportResult | null>(null);
 
   const loadFleetOverview = useCallback(async () => {
     setIsLoading(true);
@@ -107,6 +120,8 @@ export default function FleetDashboardClient() {
         vehicle.chassis,
         vehicle.renavam,
         vehicle.manufacturingModelYear,
+        vehicle.location ?? "",
+        vehicle.insuranceStatus ?? "",
       ]
         .join(" ")
         .toLowerCase()
@@ -189,6 +204,49 @@ export default function FleetDashboardClient() {
     }
   }
 
+  const handleImportSpreadsheet = useCallback(
+    async (file: File) => {
+      setIsImporting(true);
+      setStatus(`Importando ${file.name}...`);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/api/fleet/import", {
+          method: "POST",
+          body: formData,
+        });
+        const payload = (await response.json()) as FleetImportResult & { message?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.message ?? "Falha ao importar a planilha.");
+        }
+
+        setLastImport(payload);
+        setStatus(payload.message ?? "Planilha importada com sucesso.");
+        await loadFleetOverview();
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Falha ao importar a planilha.");
+      } finally {
+        setIsImporting(false);
+      }
+    },
+    [loadFleetOverview],
+  );
+
+  function onSelectImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (file) {
+      void handleImportSpreadsheet(file);
+    }
+
+    if (event.target) {
+      event.target.value = "";
+    }
+  }
+
   const openDownload = useCallback((vehicle: FleetVehicle) => {
     window.open(`/api/fleet/${vehicle.id}/crlv`, "_blank", "noopener,noreferrer");
   }, []);
@@ -220,15 +278,30 @@ export default function FleetDashboardClient() {
                 <Truck className="mr-2 size-4" />
                 {isSeeding ? "Executando seed..." : "Carga inicial"}
               </Button>
-              <Button onClick={() => fileInputRef.current?.click()} disabled={!selectedVehicle || isUploading}>
+              <Button
+                variant="secondary"
+                onClick={() => importInputRef.current?.click()}
+                disabled={isImporting || isUploading || isSeeding}
+              >
+                <FileSpreadsheet className="mr-2 size-4" />
+                {isImporting ? "Importando..." : "Importar Planilha (.xlsx)"}
+              </Button>
+              <Button onClick={() => crlvInputRef.current?.click()} disabled={!selectedVehicle || isUploading}>
                 <Upload className="mr-2 size-4" />
                 {isUploading ? "Enviando..." : "Anexar CRLV"}
               </Button>
               <input
-                ref={fileInputRef}
+                ref={crlvInputRef}
                 type="file"
                 accept=".pdf,application/pdf"
                 onChange={onSelectFile}
+                className="hidden"
+              />
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,.csv"
+                onChange={onSelectImportFile}
                 className="hidden"
               />
             </div>
@@ -237,6 +310,11 @@ export default function FleetDashboardClient() {
           <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-emerald-200">
             {status}
           </div>
+          {lastImport ? (
+            <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-100">
+              {lastImport.message}
+            </div>
+          ) : null}
         </header>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -369,6 +447,8 @@ export default function FleetDashboardClient() {
                       <tr className="text-left text-slate-400">
                         <th className="px-4 py-3 font-medium">Placa</th>
                         <th className="px-4 py-3 font-medium">Modelo</th>
+                        <th className="px-4 py-3 font-medium">Local</th>
+                        <th className="px-4 py-3 font-medium">Status do Seguro</th>
                         <th className="px-4 py-3 font-medium">Tanque</th>
                         <th className="px-4 py-3 font-medium">Licenciamento</th>
                         <th className="px-4 py-3 font-medium">CRLV</th>
@@ -388,6 +468,10 @@ export default function FleetDashboardClient() {
                           >
                             <td className="whitespace-nowrap px-4 py-3 font-medium">{vehicle.plate}</td>
                             <td className="px-4 py-3 text-slate-300">{vehicle.brandModel}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-300">{vehicle.location ?? "-"}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-300">
+                              {vehicle.insuranceStatus ?? "-"}
+                            </td>
                             <td className="whitespace-nowrap px-4 py-3">{vehicle.tankCapacityLiters} L</td>
                             <td className="whitespace-nowrap px-4 py-3">
                               <div className="flex flex-col">
@@ -418,7 +502,7 @@ export default function FleetDashboardClient() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={5} className="px-4 py-14 text-center text-slate-500">
+                          <td colSpan={7} className="px-4 py-14 text-center text-slate-500">
                             {isLoading ? "Carregando..." : "Nenhum veiculo encontrado para a busca atual."}
                           </td>
                         </tr>
@@ -465,6 +549,14 @@ export default function FleetDashboardClient() {
                       <p className="mt-2 text-sm text-white">{selectedVehicle.renavam}</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Local</p>
+                      <p className="mt-2 text-sm text-white">{selectedVehicle.location ?? "Nao informado"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Status do seguro</p>
+                      <p className="mt-2 text-sm text-white">{selectedVehicle.insuranceStatus ?? "Nao informado"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                       <p className="text-xs uppercase tracking-wide text-slate-500">Ano fabricacao/modelo</p>
                       <p className="mt-2 text-sm text-white">{selectedVehicle.manufacturingModelYear}</p>
                     </div>
@@ -506,7 +598,7 @@ export default function FleetDashboardClient() {
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Documento CRLV</p>
                     <div className="mt-3 flex flex-wrap gap-3">
-                      <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                      <Button onClick={() => crlvInputRef.current?.click()} disabled={isUploading}>
                         <FileUp className="mr-2 size-4" />
                         {selectedVehicle.hasCrlv ? "Substituir PDF" : "Anexar PDF"}
                       </Button>

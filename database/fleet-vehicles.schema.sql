@@ -6,6 +6,8 @@ create table if not exists frota_veiculos (
   marca_modelo text not null,
   ano_fabricacao_modelo text not null,
   capacidade_litragem numeric(10,2) not null default 0,
+  local text,
+  tem_seguro text,
   mes_vencimento_licenciamento smallint not null,
   caminho_crlv_pdf text,
   crlv_nome_arquivo text,

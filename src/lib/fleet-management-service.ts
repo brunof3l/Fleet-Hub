@@ -1,11 +1,14 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import * as XLSX from "xlsx";
+
 import fleetSeedVehiclesJson from "@/data/fleet-vehicles.json";
 import { hasDatabaseConfig } from "@/lib/env";
 import { getSqlClient } from "@/lib/neon";
 import type {
   FleetDocumentUploadResult,
+  FleetImportResult,
   FleetLicensingAlert,
   FleetOverview,
   FleetSeedResult,
@@ -21,11 +24,19 @@ type FleetVehicleRow = {
   marca_modelo: string;
   ano_fabricacao_modelo: string;
   capacidade_litragem: number;
+  local: string | null;
+  tem_seguro: string | null;
   mes_vencimento_licenciamento: number;
   caminho_crlv_pdf: string | null;
   crlv_nome_arquivo: string | null;
   criado_em: string | null;
   atualizado_em: string | null;
+};
+
+type FleetImportRow = {
+  plate: string;
+  location: string | null;
+  insuranceStatus: string | null;
 };
 
 const fleetSeedVehicles = fleetSeedVehiclesJson as FleetSeedVehicle[];
@@ -39,6 +50,156 @@ const LICENSING_MONTH_LABELS: Record<number, string> = {
 const CRLV_UPLOAD_DIRECTORY = path.join(process.cwd(), "public", "uploads", "crlv");
 const CRLV_PUBLIC_PREFIX = "/uploads/crlv";
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const FLEET_IMPORT_HEADER_ALIASES = {
+  plate: ["placa", "placa veiculo", "placa do veiculo", "veiculo", "veículo", "frota"],
+  location: ["local", "cidade", "unidade", "origem", "base"],
+  insurance: ["seguro", "tem seguro", "status seguro", "status do seguro", "cobertura"],
+};
+
+function normalizeHeader(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeNullableText(value: unknown): string | null {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized : null;
+}
+
+function normalizePlate(value: unknown): string {
+  return String(value ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .trim();
+}
+
+function normalizeInsuranceStatus(value: unknown): string | null {
+  const normalized = normalizeHeader(value).toUpperCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (["SIM", "S"].includes(normalized)) {
+    return "SIM";
+  }
+
+  if (["NAO", "NÃO", "NAO POSSUI", "SEM SEGURO", "N"].includes(normalized)) {
+    return "NAO";
+  }
+
+  if (normalized.includes("AGV")) {
+    return "AGV";
+  }
+
+  if (normalized.includes("UNIQUE")) {
+    return "UNIQUE";
+  }
+
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function isValidImportedPlate(plate: string): boolean {
+  return /^[A-Z0-9]{7}$/.test(plate);
+}
+
+function findColumnIndex(headers: unknown[], aliases: string[]): number {
+  const normalizedAliases = new Set(aliases.map((alias) => normalizeHeader(alias)));
+
+  return headers.findIndex((header) => normalizedAliases.has(normalizeHeader(header)));
+}
+
+function parseFleetImportRows(fileName: string, buffer: ArrayBuffer): {
+  rows: FleetImportRow[];
+  sheetsProcessed: string[];
+} {
+  const workbook = XLSX.read(Buffer.from(buffer), {
+    type: "buffer",
+    raw: false,
+  });
+  const mergedRows = new Map<string, FleetImportRow>();
+  const sheetsProcessed: string[] = [];
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const worksheet = workbook.Sheets[sheetName];
+
+    if (!worksheet) {
+      return;
+    }
+
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      defval: "",
+      blankrows: false,
+      raw: false,
+    });
+
+    let headerRowIndex = -1;
+    let plateColumnIndex = -1;
+    let locationColumnIndex = -1;
+    let insuranceColumnIndex = -1;
+
+    for (let index = 0; index < Math.min(rows.length, 15); index += 1) {
+      const currentRow = rows[index] ?? [];
+      const currentPlateIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.plate);
+      const currentLocationIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.location);
+      const currentInsuranceIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.insurance);
+
+      if (currentPlateIndex >= 0 && (currentLocationIndex >= 0 || currentInsuranceIndex >= 0)) {
+        headerRowIndex = index;
+        plateColumnIndex = currentPlateIndex;
+        locationColumnIndex = currentLocationIndex;
+        insuranceColumnIndex = currentInsuranceIndex;
+        break;
+      }
+    }
+
+    if (headerRowIndex < 0 || plateColumnIndex < 0) {
+      return;
+    }
+
+    sheetsProcessed.push(sheetName);
+
+    rows.slice(headerRowIndex + 1).forEach((row) => {
+      const plate = normalizePlate(row[plateColumnIndex]);
+
+      if (!isValidImportedPlate(plate)) {
+        return;
+      }
+
+      const current = mergedRows.get(plate);
+      const location = locationColumnIndex >= 0 ? normalizeNullableText(row[locationColumnIndex]) : null;
+      const insuranceStatus =
+        insuranceColumnIndex >= 0 ? normalizeInsuranceStatus(row[insuranceColumnIndex]) : null;
+
+      mergedRows.set(plate, {
+        plate,
+        location: location ?? current?.location ?? null,
+        insuranceStatus: insuranceStatus ?? current?.insuranceStatus ?? null,
+      });
+    });
+  });
+
+  if (!sheetsProcessed.length) {
+    throw new Error(
+      `Nenhuma aba valida foi encontrada em ${fileName}. Confira se a planilha possui colunas como PLACA, LOCAL e SEGURO.`,
+    );
+  }
+
+  return {
+    rows: Array.from(mergedRows.values()),
+    sheetsProcessed,
+  };
+}
+
+function getPlaceholderValue(prefix: string, plate: string): string {
+  return `${prefix}-${plate}`;
+}
 
 function getLicensingMonthByPlate(plate: string): number {
   const lastDigit = Number(plate.trim().slice(-1));
@@ -113,6 +274,8 @@ function mapRowToFleetVehicle(row: FleetVehicleRow, referenceDate = new Date()):
     renavam: row.renavam,
     brandModel: row.marca_modelo,
     manufacturingModelYear: row.ano_fabricacao_modelo,
+    location: row.local,
+    insuranceStatus: row.tem_seguro,
     tankCapacityLiters: Number(row.capacidade_litragem ?? 0),
     licensingDueMonth: Number(row.mes_vencimento_licenciamento ?? 0),
     licensingDueMonthLabel: getLicensingMonthLabel(Number(row.mes_vencimento_licenciamento ?? 0)),
@@ -140,6 +303,10 @@ function buildFleetOverview(vehicles: FleetVehicle[], message?: string): FleetOv
       daysUntilLicensing: vehicle.daysUntilLicensing,
     }));
 
+  const locationOptions = Array.from(
+    new Set(vehicles.map((vehicle) => vehicle.location).filter((location): location is string => Boolean(location))),
+  ).sort((left, right) => left.localeCompare(right));
+
   return {
     source: "neon",
     message,
@@ -150,6 +317,7 @@ function buildFleetOverview(vehicles: FleetVehicle[], message?: string): FleetOv
     alerts,
     vehicles,
     vehicleOptions: vehicles.map((vehicle) => vehicle.plate),
+    locationOptions,
   };
 }
 
@@ -186,6 +354,8 @@ async function getFleetVehicleRowById(vehicleId: number): Promise<FleetVehicleRo
       marca_modelo,
       ano_fabricacao_modelo,
       capacidade_litragem,
+      local,
+      tem_seguro,
       mes_vencimento_licenciamento,
       caminho_crlv_pdf,
       crlv_nome_arquivo,
@@ -215,6 +385,8 @@ export async function ensureFleetVehicleTable() {
       marca_modelo text not null,
       ano_fabricacao_modelo text not null,
       capacidade_litragem numeric(10,2) not null default 0,
+      local text,
+      tem_seguro text,
       mes_vencimento_licenciamento smallint not null,
       caminho_crlv_pdf text,
       crlv_nome_arquivo text,
@@ -223,6 +395,16 @@ export async function ensureFleetVehicleTable() {
       constraint ck_frota_veiculos_capacidade_litragem check (capacidade_litragem >= 0),
       constraint ck_frota_veiculos_mes_vencimento check (mes_vencimento_licenciamento between 1 and 12)
     )
+  `;
+
+  await sql`
+    alter table frota_veiculos
+    add column if not exists local text
+  `;
+
+  await sql`
+    alter table frota_veiculos
+    add column if not exists tem_seguro text
   `;
 
   await sql`
@@ -253,6 +435,7 @@ export async function getFleetOverview(): Promise<FleetOverview> {
       alerts: [],
       vehicles: [],
       vehicleOptions: [],
+      locationOptions: [],
     };
   }
 
@@ -268,6 +451,8 @@ export async function getFleetOverview(): Promise<FleetOverview> {
       marca_modelo,
       ano_fabricacao_modelo,
       capacidade_litragem,
+      local,
+      tem_seguro,
       mes_vencimento_licenciamento,
       caminho_crlv_pdf,
       crlv_nome_arquivo,
@@ -360,6 +545,120 @@ export async function seedFleetVehicles(): Promise<FleetSeedResult> {
       updatedCount > 0
         ? `Seed concluida com ${insertedCount} inclusoes e ${updatedCount} atualizacoes na frota.`
         : `Seed concluida com ${insertedCount} veiculos inseridos na frota.`,
+  };
+}
+
+export async function importFleetSpreadsheet(
+  fileName: string,
+  buffer: ArrayBuffer,
+): Promise<FleetImportResult> {
+  if (!hasDatabaseConfig()) {
+    throw new Error("DATABASE_URL nao configurado. Defina a conexao com o Neon antes de importar a planilha.");
+  }
+
+  await ensureFleetVehicleTable();
+
+  const parsed = parseFleetImportRows(fileName, buffer);
+
+  if (!parsed.rows.length) {
+    return {
+      insertedCount: 0,
+      skippedCount: 0,
+      updatedCount: 0,
+      processedRows: 0,
+      sheetsProcessed: parsed.sheetsProcessed,
+      message: "Nenhum veiculo valido foi encontrado na planilha enviada.",
+    };
+  }
+
+  const sql = getSqlClient();
+  const importedPlates = parsed.rows.map((row) => row.plate);
+  const existingRows = await sql<{
+    id: number;
+    placa: string;
+    local: string | null;
+    tem_seguro: string | null;
+  }[]>`
+    select
+      id,
+      placa,
+      local,
+      tem_seguro
+    from frota_veiculos
+    where placa in ${sql(importedPlates)}
+  `;
+  const existingMap = new Map(existingRows.map((row) => [row.placa, row]));
+  let insertedCount = 0;
+  let skippedCount = 0;
+  let updatedCount = 0;
+
+  await sql.begin(async (transaction) => {
+    for (const row of parsed.rows) {
+      const existing = existingMap.get(row.plate);
+
+      if (existing) {
+        skippedCount += 1;
+
+        const nextLocation = row.location ?? existing.local;
+        const nextInsuranceStatus = row.insuranceStatus ?? existing.tem_seguro;
+        const hasLocationChange = nextLocation !== existing.local;
+        const hasInsuranceChange = nextInsuranceStatus !== existing.tem_seguro;
+
+        if (hasLocationChange || hasInsuranceChange) {
+          await transaction`
+            update frota_veiculos
+            set
+              local = ${nextLocation},
+              tem_seguro = ${nextInsuranceStatus},
+              atualizado_em = now()
+            where id = ${existing.id}
+          `;
+          updatedCount += 1;
+        }
+
+        continue;
+      }
+
+      await transaction`
+        insert into frota_veiculos (
+          placa,
+          chassi,
+          renavam,
+          marca_modelo,
+          ano_fabricacao_modelo,
+          capacidade_litragem,
+          local,
+          tem_seguro,
+          mes_vencimento_licenciamento
+        ) values (
+          ${row.plate},
+          ${getPlaceholderValue("CHASSI-PENDENTE", row.plate)},
+          ${getPlaceholderValue("RENAVAM-PENDENTE", row.plate)},
+          ${"NAO INFORMADO"},
+          ${"NAO INFORMADO"},
+          ${0},
+          ${row.location},
+          ${row.insuranceStatus},
+          ${getLicensingMonthByPlate(row.plate)}
+        )
+      `;
+
+      insertedCount += 1;
+    }
+  });
+
+  const updateMessage =
+    updatedCount > 0
+      ? ` ${updatedCount} registros duplicados tiveram local e/ou seguro atualizados.`
+      : "";
+
+  return {
+    insertedCount,
+    skippedCount,
+    updatedCount,
+    processedRows: parsed.rows.length,
+    sheetsProcessed: parsed.sheetsProcessed,
+    message: `${insertedCount} novos veiculos importados com sucesso. ${skippedCount} veiculos ignorados por ja estarem cadastrados.${updateMessage}`,
   };
 }
 
