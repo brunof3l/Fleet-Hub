@@ -10,9 +10,6 @@ export async function POST(
   { params }: { params: { vehicleId: string } },
 ) {
   try {
-    // #region debug-point B:route-formdata-start
-    console.log("A iniciar rececao do FormData...");
-    // #endregion
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -20,16 +17,10 @@ export async function POST(
       return NextResponse.json({ error: "Envie um arquivo PDF no campo 'file'." }, { status: 400 });
     }
 
-    // #region debug-point B:route-file-received
-    console.log("Ficheiro recebido:", file.name, file.size);
-    // #endregion
-
     const result = await saveFleetVehicleCrlv(params.vehicleId, file);
     return NextResponse.json(result);
   } catch (error) {
-    // #region debug-point E:route-error
-    console.error("ERRO DETETADO:", error);
-    // #endregion
+    console.error("Falha ao anexar CRLV:", error);
     const message = error instanceof Error ? error.message : "Falha ao anexar o CRLV.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

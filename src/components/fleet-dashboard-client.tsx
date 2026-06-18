@@ -7,12 +7,16 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent,
 } from "react";
 import {
   AlertTriangle,
   Download,
+  Eye,
   FileSpreadsheet,
+  FileText,
   FileUp,
+  Info,
   RefreshCw,
   ShieldAlert,
   Truck,
@@ -35,6 +39,16 @@ function formatDateLabel(value: string): string {
   }
 
   return new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T00:00:00`));
+}
+
+type CrlvFilter = "all" | "with" | "without";
+
+function isProvisionalVehicle(vehicle: FleetVehicle): boolean {
+  return (
+    vehicle.chassis?.startsWith("CHASSI-PENDENTE") ||
+    vehicle.renavam?.startsWith("RENAVAM-PENDENTE") ||
+    vehicle.brandModel === "NAO INFORMADO"
+  );
 }
 
 function KpiCard({
@@ -62,6 +76,9 @@ export default function FleetDashboardClient() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [overview, setOverview] = useState<FleetOverview | null>(null);
   const [search, setSearch] = useState("");
+  const [crlvFilter, setCrlvFilter] = useState<CrlvFilter>("all");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
+  const [isDragging, setIsDragging] = useState(false);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [status, setStatus] = useState("Carregando dados da frota...");
   const [isLoading, setIsLoading] = useState(true);
@@ -109,12 +126,21 @@ export default function FleetDashboardClient() {
   const filteredVehicles = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
-    if (!normalizedSearch) {
-      return overview?.vehicles ?? [];
-    }
+    return (overview?.vehicles ?? []).filter((vehicle) => {
+      if (crlvFilter === "with" && !vehicle.hasCrlv) {
+        return false;
+      }
+      if (crlvFilter === "without" && vehicle.hasCrlv) {
+        return false;
+      }
+      if (locationFilter !== "all" && (vehicle.location ?? "") !== locationFilter) {
+        return false;
+      }
+      if (!normalizedSearch) {
+        return true;
+      }
 
-    return (overview?.vehicles ?? []).filter((vehicle) =>
-      [
+      return [
         vehicle.plate,
         vehicle.brandModel,
         vehicle.chassis,
@@ -125,9 +151,9 @@ export default function FleetDashboardClient() {
       ]
         .join(" ")
         .toLowerCase()
-        .includes(normalizedSearch),
-    );
-  }, [overview?.vehicles, search]);
+        .includes(normalizedSearch);
+    });
+  }, [overview?.vehicles, search, crlvFilter, locationFilter]);
 
   const selectedVehicle = useMemo(
     () => overview?.vehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? null,
@@ -171,31 +197,11 @@ export default function FleetDashboardClient() {
         const formData = new FormData();
         formData.append("file", file);
 
-        // #region debug-point A:frontend-upload-request
-        console.log("[DEBUG] A preparar envio do CRLV...", {
-          vehicleId: selectedVehicle.id,
-          plate: selectedVehicle.plate,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          usesFormData: true,
-          manuallyDefinedContentTypeHeader: false,
-        });
-        // #endregion
-
         const response = await fetch(`/api/fleet/${selectedVehicle.id}/crlv`, {
           method: "POST",
           body: formData,
         });
         const payload = await response.json();
-
-        // #region debug-point E:frontend-upload-response
-        console.log("[DEBUG] Resposta do upload de CRLV recebida.", {
-          status: response.status,
-          ok: response.ok,
-          payload,
-        });
-        // #endregion
 
         if (!response.ok) {
           throw new Error(payload.error ?? payload.message ?? "Falha ao anexar o CRLV.");
@@ -204,9 +210,6 @@ export default function FleetDashboardClient() {
         setStatus(payload.message ?? "CRLV anexado com sucesso.");
         await loadFleetOverview();
       } catch (error) {
-        // #region debug-point E:frontend-upload-error
-        console.error("[DEBUG] Falha no upload de CRLV.", error);
-        // #endregion
         setStatus(error instanceof Error ? error.message : "Falha ao anexar o CRLV.");
       } finally {
         setIsUploading(false);
@@ -225,6 +228,24 @@ export default function FleetDashboardClient() {
     if (event.target) {
       event.target.value = "";
     }
+  }
+
+  function onDropFile(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragging(false);
+
+    const file = event.dataTransfer.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (file.type && file.type !== "application/pdf") {
+      setStatus("Envie um arquivo PDF valido para o CRLV.");
+      return;
+    }
+
+    void handleUploadCrlv(file);
   }
 
   const handleImportSpreadsheet = useCallback(
@@ -451,12 +472,49 @@ export default function FleetDashboardClient() {
 
         <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
           <Card>
-            <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <CardTitle>Base da frota</CardTitle>
-                <CardDescription>Selecione um veiculo para ver os detalhes e anexar o CRLV.</CardDescription>
+            <CardHeader className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <CardTitle>Base da frota</CardTitle>
+                  <CardDescription>Selecione um veiculo para ver os detalhes e anexar o CRLV.</CardDescription>
+                </div>
+                <span className="text-sm text-slate-500">{filteredVehicles.length} veiculos exibidos</span>
               </div>
-              <span className="text-sm text-slate-500">{filteredVehicles.length} veiculos exibidos</span>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  {([
+                    { key: "all", label: "Todos" },
+                    { key: "with", label: "Com CRLV" },
+                    { key: "without", label: "Sem CRLV" },
+                  ] as { key: CrlvFilter; label: string }[]).map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setCrlvFilter(option.key)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition",
+                        crlvFilter === option.key
+                          ? "border-sky-400/40 bg-sky-500/15 text-sky-100"
+                          : "border-white/10 bg-white/[0.02] text-slate-400 hover:text-slate-200",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={locationFilter}
+                  onChange={(event) => setLocationFilter(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm text-slate-200 outline-none focus:border-sky-400/40 lg:w-56"
+                >
+                  <option value="all">Todos os locais</option>
+                  {(overview?.locationOptions ?? []).map((location) => (
+                    <option key={location} value={location}>
+                      {location}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -485,7 +543,20 @@ export default function FleetDashboardClient() {
                             )}
                             onClick={() => setSelectedVehicleId(vehicle.id)}
                           >
-                            <td className="whitespace-nowrap px-4 py-3 font-medium">{vehicle.plate}</td>
+                            <td className="whitespace-nowrap px-4 py-3 font-medium">
+                              <div className="flex items-center gap-2">
+                                <span>{vehicle.plate}</span>
+                                {isProvisionalVehicle(vehicle) ? (
+                                  <span
+                                    title="Cadastro provisorio: complete chassi, renavam e modelo."
+                                    className="inline-flex items-center gap-1 rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-200"
+                                  >
+                                    <Info className="size-3" />
+                                    Provisorio
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
                             <td className="px-4 py-3 text-slate-300">{vehicle.brandModel}</td>
                             <td className="whitespace-nowrap px-4 py-3 text-slate-300">{vehicle.location ?? "-"}</td>
                             <td className="whitespace-nowrap px-4 py-3 text-slate-300">
@@ -614,27 +685,95 @@ export default function FleetDashboardClient() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Documento CRLV</p>
+                  <div
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={onDropFile}
+                    className={cn(
+                      "rounded-2xl border p-4 transition",
+                      isDragging
+                        ? "border-sky-400/50 bg-sky-500/10"
+                        : "border-white/10 bg-black/20",
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Documento CRLV</p>
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium",
+                          selectedVehicle.hasCrlv
+                            ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                            : "border-amber-400/20 bg-amber-400/10 text-amber-200",
+                        )}
+                      >
+                        {selectedVehicle.hasCrlv ? "Anexado" : "Pendente"}
+                      </span>
+                    </div>
+
                     <div className="mt-3 flex flex-wrap gap-3">
                       <Button onClick={() => crlvInputRef.current?.click()} disabled={isUploading}>
                         <FileUp className="mr-2 size-4" />
                         {selectedVehicle.hasCrlv ? "Substituir PDF" : "Anexar PDF"}
                       </Button>
-                      {selectedVehicle.crlvPdfPath ? (
-                        <Button variant="outline" asChild>
-                          <a href={selectedVehicle.crlvPdfPath} target="_blank" rel="noreferrer">
-                            <Download className="mr-2 size-4" />
-                            Ver CRLV
-                          </a>
-                        </Button>
+                      {selectedVehicle.hasCrlv ? (
+                        <>
+                          <Button variant="outline" asChild>
+                            <a
+                              href={`/api/fleet/${selectedVehicle.id}/crlv/view`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <Eye className="mr-2 size-4" />
+                              Abrir
+                            </a>
+                          </Button>
+                          <Button variant="outline" asChild>
+                            <a href={`/api/fleet/${selectedVehicle.id}/crlv/view?download=1`}>
+                              <Download className="mr-2 size-4" />
+                              Baixar
+                            </a>
+                          </Button>
+                        </>
                       ) : (
                         <Button variant="outline" disabled>
-                          <Download className="mr-2 size-4" />
-                          Ver CRLV
+                          <Eye className="mr-2 size-4" />
+                          Abrir
                         </Button>
                       )}
                     </div>
+
+                    {selectedVehicle.hasCrlv ? (
+                      <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-slate-950">
+                        <object
+                          data={`/api/fleet/${selectedVehicle.id}/crlv/view`}
+                          type="application/pdf"
+                          className="h-80 w-full"
+                          aria-label={`CRLV de ${selectedVehicle.plate}`}
+                        >
+                          <div className="flex h-80 flex-col items-center justify-center gap-2 text-sm text-slate-400">
+                            <FileText className="size-6" />
+                            Pre-visualizacao indisponivel neste navegador.
+                            <a
+                              href={`/api/fleet/${selectedVehicle.id}/crlv/view`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sky-300 underline"
+                            >
+                              Abrir em nova aba
+                            </a>
+                          </div>
+                        </object>
+                      </div>
+                    ) : (
+                      <div className="mt-4 flex h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 text-sm text-slate-500">
+                        <Upload className="size-5" />
+                        Arraste o PDF aqui ou use &quot;Anexar PDF&quot;.
+                      </div>
+                    )}
+
                     <p className="mt-3 text-sm text-slate-400">
                       {selectedVehicle.hasCrlv
                         ? `Arquivo atual: ${selectedVehicle.crlvFileName ?? "PDF anexado"}`

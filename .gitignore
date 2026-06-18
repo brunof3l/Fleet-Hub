@@ -11,3 +11,6 @@ yarn-error.log*
 pnpm-debug.log*
 public/uploads/crlv/*.pdf
 !public/uploads/crlv/.gitkeep
+
+# TypeScript incremental build info
+tsconfig.tsbuildinfo
