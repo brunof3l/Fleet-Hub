@@ -375,6 +375,7 @@ export function analyzeSpeedWorkbook(fileName: string, buffer: ArrayBuffer): Spe
 
 export function buildViolationExportRows(violations: SpeedViolation[]) {
   return violations.map((violation) => ({
+    Prefixo: violation.prefix ?? "---",
     Veiculo: violation.vehicle,
     "Cidade/Local": violation.location ?? "---",
     Motorista: violation.driver,

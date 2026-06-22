@@ -13,6 +13,7 @@ export interface SpeedViolation {
   durationMinutes: string;
   maxSpeed: number;
   location?: string | null;
+  prefix?: string | null;
 }
 
 export interface SpeedColumnMap {

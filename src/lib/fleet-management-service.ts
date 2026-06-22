@@ -17,6 +17,7 @@ import type {
 type FleetVehicleRow = {
   id: number;
   placa: string;
+  prefixo: string | null;
   chassi: string;
   renavam: string;
   marca_modelo: string;
@@ -33,6 +34,7 @@ type FleetVehicleRow = {
 
 type FleetImportRow = {
   plate: string;
+  prefix: string | null;
   brandModel: string | null;
   manufacturingModelYear: string | null;
   location: string | null;
@@ -50,6 +52,7 @@ const LICENSING_MONTH_LABELS: Record<number, string> = {
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const FLEET_IMPORT_HEADER_ALIASES = {
   plate: ["placa", "placa veiculo", "placa do veiculo", "veiculo", "veículo", "frota"],
+  prefix: ["prefixo", "prefixo veiculo", "prefixo do veiculo", "cod prefixo", "codigo"],
   brand: ["marca", "fabricante", "montadora"],
   model: ["modelo", "modelo veiculo", "modelo do veiculo", "descricao", "descrição"],
   year: ["ano", "ano modelo", "ano fabricacao/modelo", "ano fabricação/modelo", "fabricacao/modelo"],
@@ -69,6 +72,14 @@ function normalizeHeader(value: unknown): string {
 
 function normalizeNullableText(value: unknown): string | null {
   const normalized = String(value ?? "").trim();
+  return normalized ? normalized : null;
+}
+
+function normalizePrefix(value: unknown): string | null {
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
   return normalized ? normalized : null;
 }
 
@@ -160,6 +171,7 @@ function parseFleetImportRows(fileName: string, buffer: ArrayBuffer): {
 
     let headerRowIndex = -1;
     let plateColumnIndex = -1;
+    let prefixColumnIndex = -1;
     let brandColumnIndex = -1;
     let modelColumnIndex = -1;
     let yearColumnIndex = -1;
@@ -169,6 +181,7 @@ function parseFleetImportRows(fileName: string, buffer: ArrayBuffer): {
     for (let index = 0; index < Math.min(rows.length, 15); index += 1) {
       const currentRow = rows[index] ?? [];
       const currentPlateIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.plate);
+      const currentPrefixIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.prefix);
       const currentBrandIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.brand);
       const currentModelIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.model);
       const currentYearIndex = findColumnIndex(currentRow, FLEET_IMPORT_HEADER_ALIASES.year);
@@ -187,6 +200,7 @@ function parseFleetImportRows(fileName: string, buffer: ArrayBuffer): {
       ) {
         headerRowIndex = index;
         plateColumnIndex = currentPlateIndex;
+        prefixColumnIndex = currentPrefixIndex;
         brandColumnIndex = currentBrandIndex;
         modelColumnIndex = currentModelIndex;
         yearColumnIndex = currentYearIndex;
@@ -210,6 +224,7 @@ function parseFleetImportRows(fileName: string, buffer: ArrayBuffer): {
       }
 
       const current = mergedRows.get(plate);
+      const prefix = prefixColumnIndex >= 0 ? normalizePrefix(row[prefixColumnIndex]) : null;
       const brandModel = buildBrandModel(
         brandColumnIndex >= 0 ? row[brandColumnIndex] : null,
         modelColumnIndex >= 0 ? row[modelColumnIndex] : null,
@@ -222,6 +237,7 @@ function parseFleetImportRows(fileName: string, buffer: ArrayBuffer): {
 
       mergedRows.set(plate, {
         plate,
+        prefix: prefix ?? current?.prefix ?? null,
         brandModel: brandModel ?? current?.brandModel ?? null,
         manufacturingModelYear: manufacturingModelYear ?? current?.manufacturingModelYear ?? null,
         location: location ?? current?.location ?? null,
@@ -315,6 +331,7 @@ function mapRowToFleetVehicle(row: FleetVehicleRow, referenceDate = new Date()):
   return {
     id: String(row.id),
     plate: row.placa,
+    prefix: row.prefixo,
     chassis: row.chassi,
     renavam: row.renavam,
     brandModel: row.marca_modelo,
@@ -412,6 +429,7 @@ async function getFleetVehicleRowById(vehicleId: number): Promise<FleetVehicleRo
     select
       id,
       placa,
+      prefixo,
       chassi,
       renavam,
       marca_modelo,
@@ -458,6 +476,11 @@ export async function ensureFleetVehicleTable() {
       constraint ck_frota_veiculos_capacidade_litragem check (capacidade_litragem >= 0),
       constraint ck_frota_veiculos_mes_vencimento check (mes_vencimento_licenciamento between 1 and 12)
     )
+  `;
+
+  await sql`
+    alter table frota_veiculos
+    add column if not exists prefixo text
   `;
 
   await sql`
@@ -509,6 +532,7 @@ export async function getFleetOverview(): Promise<FleetOverview> {
     select
       id,
       placa,
+      prefixo,
       chassi,
       renavam,
       marca_modelo,
@@ -639,6 +663,7 @@ export async function importFleetSpreadsheet(
   const existingRows = await sql<{
     id: number;
     placa: string;
+    prefixo: string | null;
     marca_modelo: string | null;
     ano_fabricacao_modelo: string | null;
     local: string | null;
@@ -647,6 +672,7 @@ export async function importFleetSpreadsheet(
     select
       id,
       placa,
+      prefixo,
       marca_modelo,
       ano_fabricacao_modelo,
       local,
@@ -666,11 +692,13 @@ export async function importFleetSpreadsheet(
       if (existing) {
         skippedCount += 1;
 
+        const nextPrefix = row.prefix ?? existing.prefixo;
         const nextLocation = row.location ?? existing.local;
         const nextInsuranceStatus = row.insuranceStatus ?? existing.tem_seguro;
         const nextBrandModel = row.brandModel ?? existing.marca_modelo;
         const nextManufacturingModelYear =
           row.manufacturingModelYear ?? existing.ano_fabricacao_modelo;
+        const hasPrefixChange = nextPrefix !== existing.prefixo;
         const hasLocationChange = nextLocation !== existing.local;
         const hasInsuranceChange = nextInsuranceStatus !== existing.tem_seguro;
         const hasBrandModelChange = nextBrandModel !== existing.marca_modelo;
@@ -678,6 +706,7 @@ export async function importFleetSpreadsheet(
           nextManufacturingModelYear !== existing.ano_fabricacao_modelo;
 
         if (
+          hasPrefixChange ||
           hasLocationChange ||
           hasInsuranceChange ||
           hasBrandModelChange ||
@@ -686,6 +715,7 @@ export async function importFleetSpreadsheet(
           await transaction`
             update frota_veiculos
             set
+              prefixo = ${nextPrefix},
               marca_modelo = ${nextBrandModel},
               ano_fabricacao_modelo = ${nextManufacturingModelYear},
               local = ${nextLocation},
@@ -702,6 +732,7 @@ export async function importFleetSpreadsheet(
       await transaction`
         insert into frota_veiculos (
           placa,
+          prefixo,
           chassi,
           renavam,
           marca_modelo,
@@ -712,6 +743,7 @@ export async function importFleetSpreadsheet(
           mes_vencimento_licenciamento
         ) values (
           ${row.plate},
+          ${row.prefix},
           ${getPlaceholderValue("CHASSI-PENDENTE", row.plate)},
           ${getPlaceholderValue("RENAVAM-PENDENTE", row.plate)},
           ${row.brandModel ?? "NAO INFORMADO"},

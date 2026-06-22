@@ -10,6 +10,7 @@ export interface FleetSeedVehicle {
 export interface FleetVehicle {
   id: string;
   plate: string;
+  prefix: string | null;
   chassis: string;
   renavam: string;
   brandModel: string;

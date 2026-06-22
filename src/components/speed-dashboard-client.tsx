@@ -36,6 +36,7 @@ import { ModuleNav } from "./module-nav";
 
 type EnrichedSpeedViolation = SpeedViolation & {
   location: string | null;
+  prefix: string | null;
   linked: boolean;
 };
 
@@ -166,6 +167,7 @@ export default function SpeedDashboardClient() {
       return {
         ...violation,
         location: matchedFleetVehicle?.location ?? null,
+        prefix: matchedFleetVehicle?.prefix ?? null,
         linked: Boolean(matchedFleetVehicle),
       };
     });
@@ -178,6 +180,18 @@ export default function SpeedDashboardClient() {
 
     return enrichedViolations.filter((violation) => violation.location === selectedLocation);
   }, [enrichedViolations, selectedLocation]);
+
+  const prefixByVehicleLabel = useMemo(() => {
+    const lookup = new Map<string, string>();
+
+    enrichedViolations.forEach((violation) => {
+      if (violation.prefix && !lookup.has(violation.vehicle)) {
+        lookup.set(violation.vehicle, violation.prefix);
+      }
+    });
+
+    return lookup;
+  }, [enrichedViolations]);
 
   useEffect(() => {
     let isMounted = true;
@@ -460,7 +474,16 @@ export default function SpeedDashboardClient() {
           <KpiCard
             title="Maior Velocidade"
             value={`${dashboardSummary.highestSpeed} km/h`}
-            subtitle={dashboardSummary.highestSpeedVehicle ?? "Sem registros"}
+            subtitle={
+              dashboardSummary.highestSpeedVehicle
+                ? [
+                    prefixByVehicleLabel.get(dashboardSummary.highestSpeedVehicle),
+                    dashboardSummary.highestSpeedVehicle,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")
+                : "Sem registros"
+            }
           />
           <KpiCard
             title="Local Critico"
@@ -513,7 +536,10 @@ export default function SpeedDashboardClient() {
                         borderRadius: 16,
                       }}
                       formatter={(value) => [`${Number(value)} ocorrencias`, "Excessos"]}
-                      labelFormatter={(label) => `Veiculo: ${label}`}
+                      labelFormatter={(label) => {
+                        const prefix = prefixByVehicleLabel.get(String(label));
+                        return prefix ? `${prefix} • ${label}` : `Veiculo: ${label}`;
+                      }}
                     />
                     <Bar dataKey="count" radius={[10, 10, 0, 0]}>
                       {topOffenders.map((entry, index) => (
@@ -653,6 +679,7 @@ export default function SpeedDashboardClient() {
                 <table className="min-w-full divide-y divide-white/10 text-sm">
                   <thead className="sticky top-0 bg-slate-950/95 backdrop-blur-sm">
                     <tr className="text-left text-slate-400">
+                      <th className="px-4 py-3 font-medium">Prefixo</th>
                       <th className="px-4 py-3 font-medium">Veiculo</th>
                       <th className="px-4 py-3 font-medium">Cidade/Local</th>
                       <th className="px-4 py-3 font-medium">Motorista</th>
@@ -671,6 +698,15 @@ export default function SpeedDashboardClient() {
                             key={`${violation.vehicle}-${violation.startLabel}-${violation.endLabel}`}
                             className="text-slate-200 transition hover:bg-white/[0.03]"
                           >
+                            <td className="whitespace-nowrap px-4 py-3">
+                              {violation.prefix ? (
+                                <span className="inline-flex items-center rounded-full border border-sky-400/30 bg-sky-400/10 px-2.5 py-0.5 text-xs font-semibold tracking-wide text-sky-200">
+                                  {violation.prefix}
+                                </span>
+                              ) : (
+                                <span className="text-slate-600">---</span>
+                              )}
+                            </td>
                             <td className="whitespace-nowrap px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <span>{violation.vehicle}</span>
@@ -700,7 +736,7 @@ export default function SpeedDashboardClient() {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={8} className="px-4 py-14 text-center text-slate-500">
+                        <td colSpan={9} className="px-4 py-14 text-center text-slate-500">
                           {isProcessing
                             ? "Processando relatorio..."
                             : "Nenhuma ocorrencia encontrada para o filtro atual."}
