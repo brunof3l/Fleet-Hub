@@ -9,7 +9,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react";
-import { AlertTriangle, Download, Gauge, Link2, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, Check, Copy, Download, Gauge, Link2, RefreshCw, Upload } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -28,7 +28,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Table, TableScroll } from "@/components/ui/table";
-import { analyzeSpeedWorkbook, buildViolationExportRows, normalizeVehicleKey } from "@/lib/speed-analysis";
+import {
+  SPEED_LIMIT_KMH,
+  analyzeSpeedWorkbook,
+  buildViolationExportRows,
+  normalizeVehicleKey,
+} from "@/lib/speed-analysis";
 import { cn } from "@/lib/utils";
 import type { FleetOverview, FleetVehicle } from "@/types/fleet";
 import type { SpeedDashboardData, SpeedDashboardViolationPayload, SpeedViolation } from "@/types/speed";
@@ -88,6 +93,63 @@ function getFleetVehicleMatch(
   );
 }
 
+function formatBrDate(value: Date): string {
+  return new Intl.DateTimeFormat("pt-BR").format(value);
+}
+
+function buildReportSummaryText(violations: EnrichedSpeedViolation[]): string {
+  if (!violations.length) {
+    return "";
+  }
+
+  const vehicleStats = new Map<string, { label: string; maxSpeed: number }>();
+  let minDate = Number.POSITIVE_INFINITY;
+  let maxDate = Number.NEGATIVE_INFINITY;
+
+  for (const violation of violations) {
+    const start = new Date(violation.startDate).getTime();
+    const end = new Date(violation.endDate).getTime();
+
+    if (Number.isFinite(start)) {
+      minDate = Math.min(minDate, start);
+    }
+    if (Number.isFinite(end)) {
+      maxDate = Math.max(maxDate, end);
+    }
+
+    const label = violation.prefix ? `${violation.prefix} / ${violation.vehicle}` : violation.vehicle;
+    const current = vehicleStats.get(violation.vehicle);
+
+    if (!current || violation.maxSpeed > current.maxSpeed) {
+      vehicleStats.set(violation.vehicle, { label, maxSpeed: violation.maxSpeed });
+    }
+  }
+
+  const uniqueVehicles = vehicleStats.size;
+  const topThree = Array.from(vehicleStats.values())
+    .sort((left, right) => right.maxSpeed - left.maxSpeed)
+    .slice(0, 3);
+
+  const startLabel = Number.isFinite(minDate) ? formatBrDate(new Date(minDate)) : null;
+  const endLabel = Number.isFinite(maxDate) ? formatBrDate(new Date(maxDate)) : null;
+  const periodLabel =
+    startLabel && endLabel ? (startLabel === endLabel ? startLabel : `${startLabel} a ${endLabel}`) : null;
+
+  const occurrenceWord = violations.length === 1 ? "ocorrência" : "ocorrências";
+  const vehicleWord = uniqueVehicles === 1 ? "veículo" : "veículos";
+
+  const lines = [
+    periodLabel ? `Relatório de Velocidade (${periodLabel})` : "Relatório de Velocidade",
+    "",
+    `Resumo: ${violations.length} ${occurrenceWord} acima de ${SPEED_LIMIT_KMH} km/h, envolvendo ${uniqueVehicles} ${vehicleWord}.`,
+    "",
+    "Top 3 maiores velocidades:",
+    ...topThree.map((item, index) => `${index + 1}. ${item.label} — ${item.maxSpeed} km/h`),
+  ];
+
+  return lines.join("\n");
+}
+
 export default function SpeedDashboardClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [violations, setViolations] = useState<SpeedViolation[]>([]);
@@ -104,6 +166,7 @@ export default function SpeedDashboardClient() {
   const [isLoadingFleet, setIsLoadingFleet] = useState(true);
   const [dashboardData, setDashboardData] = useState<SpeedDashboardData | null>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -180,6 +243,28 @@ export default function SpeedDashboardClient() {
 
     return enrichedViolations.filter((violation) => violation.location === selectedLocation);
   }, [enrichedViolations, selectedLocation]);
+
+  const reportSummaryText = useMemo(
+    () => buildReportSummaryText(filteredViolations),
+    [filteredViolations],
+  );
+
+  useEffect(() => {
+    setCopied(false);
+  }, [reportSummaryText]);
+
+  const copyReportSummary = useCallback(async () => {
+    if (!reportSummaryText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(reportSummaryText);
+      setCopied(true);
+    } catch {
+      setStatus("Nao foi possivel copiar automaticamente. Selecione o texto e copie manualmente.");
+    }
+  }, [reportSummaryText]);
 
   const prefixByVehicleLabel = useMemo(() => {
     const lookup = new Map<string, string>();
@@ -500,6 +585,32 @@ export default function SpeedDashboardClient() {
             subtitle={`${filteredViolations.length} ocorrencias no filtro atual`}
           />
         </section>
+
+        {reportSummaryText ? (
+          <Card className="border-sky-400/20">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>Texto para envio</CardTitle>
+                <CardDescription>
+                  Resumo pronto para copiar e enviar junto com o relatorio. Atualiza a cada novo arquivo ou filtro.
+                </CardDescription>
+              </div>
+              <Button variant="outline" onClick={() => void copyReportSummary()}>
+                {copied ? <Check className="mr-2 size-4" /> : <Copy className="mr-2 size-4" />}
+                {copied ? "Copiado!" : "Copiar texto"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <textarea
+                readOnly
+                value={reportSummaryText}
+                rows={reportSummaryText.split("\n").length + 1}
+                onFocus={(event) => event.currentTarget.select()}
+                className="w-full resize-none rounded-2xl border border-white/10 bg-black/30 p-4 font-mono text-sm leading-relaxed text-slate-200 outline-none transition focus:border-sky-400/40"
+              />
+            </CardContent>
+          </Card>
+        ) : null}
 
         <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
           <Card>
