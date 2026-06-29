@@ -186,3 +186,87 @@ export interface MonthlyReportResult {
 export interface CleanupResult {
   deletedFuelRows: number;
 }
+
+export interface InfleetFuelling {
+  id: string;
+  occurredAt: string;
+  date: string;
+  plate: string;
+  rawPlate: string;
+  vehicleName: string;
+  liters: number;
+  cost: number;
+  unitPrice: number;
+  fuelType: string;
+  supplier: string;
+}
+
+export type ConferenceStatus = "CONFORME" | "DIVERGENTE" | "NAO_LANCADO";
+
+export interface FaturaHeader {
+  supplier: string;
+  invoiceNumber: string;
+  issueDate: string;
+  client: string;
+}
+
+export interface FaturaLine {
+  documentNumber: string;
+  date: string;
+  rawDate: string;
+  plate: string;
+  rawPlate: string;
+  quantity: number;
+  odometerStart: number | null;
+  odometerEnd: number | null;
+  kmPerLiter: number | null;
+  fuelType: string;
+  pricePerLiter: number;
+  totalCost: number;
+}
+
+export interface ParseFaturaResult {
+  header: FaturaHeader;
+  lines: FaturaLine[];
+}
+
+export interface ConferenceMatchedRecord {
+  id: string;
+  date: string;
+  vehicle: string;
+  quantity: number;
+  pricePerLiter: number;
+  totalCost: number;
+}
+
+export interface ConferenceMatchDetail {
+  line: FaturaLine;
+  status: ConferenceStatus;
+  matchedRecord: ConferenceMatchedRecord | null;
+  divergences: string[];
+}
+
+export interface InfleetOnlyRecord {
+  id: string;
+  date: string;
+  vehicle: string;
+  plate: string;
+  supplier: string;
+  quantity: number;
+  totalCost: number;
+}
+
+export interface ConferenceResult {
+  header: FaturaHeader;
+  periodStart: string;
+  periodEnd: string;
+  totalLines: number;
+  conformeCount: number;
+  divergenteCount: number;
+  naoLancadoCount: number;
+  faturaTotalLiters: number;
+  faturaTotalValue: number;
+  matches: ConferenceMatchDetail[];
+  infleetOnly: InfleetOnlyRecord[];
+  message?: string;
+}
