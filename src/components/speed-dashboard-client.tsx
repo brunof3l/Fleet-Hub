@@ -431,6 +431,33 @@ export default function SpeedDashboardClient() {
           : `${analysis.violations.length} ocorrencias acima de 130 km/h foram encontradas.`,
       );
       setIsProcessing(false);
+
+      // Persiste as ocorrencias para alimentar o histórico e o overview executivo.
+      if (analysis.violations.length) {
+        const occurrences = analysis.violations.map((violation) => ({
+          vehicle: violation.vehicle,
+          driver: violation.driver,
+          address: violation.address,
+          location: violation.location ?? null,
+          prefix: violation.prefix ?? null,
+          maxSpeed: violation.maxSpeed,
+          startDate:
+            violation.startDate instanceof Date
+              ? violation.startDate.toISOString()
+              : String(violation.startDate),
+          endDate:
+            violation.endDate instanceof Date
+              ? violation.endDate.toISOString()
+              : String(violation.endDate),
+          durationMinutes: violation.durationMinutes,
+        }));
+
+        void fetch("/api/velocidade/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ occurrences }),
+        }).catch(() => undefined);
+      }
     };
 
     reader.onerror = () => {
