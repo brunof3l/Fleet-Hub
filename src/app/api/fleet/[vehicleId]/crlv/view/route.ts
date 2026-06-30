@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireApiUser } from "@/lib/auth";
 import { getFleetVehicleCrlvStream } from "@/lib/fleet-management-service";
 
 export const runtime = "nodejs";
@@ -9,6 +10,11 @@ export async function GET(
   request: Request,
   { params }: { params: { vehicleId: string } },
 ) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const { stream, fileName, plate } = await getFleetVehicleCrlvStream(params.vehicleId);
     const wantsDownload = new URL(request.url).searchParams.get("download") === "1";

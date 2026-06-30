@@ -1,5 +1,7 @@
 import SpeedDashboardClient from "@/components/speed-dashboard-client";
+import { requirePageUser } from "@/lib/auth";
 
-export default function VelocidadePage() {
+export default async function VelocidadePage() {
+  await requirePageUser();
   return <SpeedDashboardClient />;
 }

@@ -1,4 +1,4 @@
-import { getCronSecret } from "@/lib/env";
+import { isCronAuthorized } from "@/lib/cron-auth";
 import {
   cleanupRetention,
   getPreviousMonthRange,
@@ -10,17 +10,8 @@ import { buildMonthlyReportWorkbook, sendMonthlyReportEmail } from "@/lib/report
 
 export const runtime = "nodejs";
 
-function isAuthorized(request: Request): boolean {
-  const secret = getCronSecret();
-  if (!secret) {
-    return true;
-  }
-
-  return request.headers.get("authorization") === `Bearer ${secret}`;
-}
-
 export async function POST(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return Response.json({ message: "Nao autorizado." }, { status: 401 });
   }
 

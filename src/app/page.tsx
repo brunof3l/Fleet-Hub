@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BarChart3, Fuel, Gauge, Truck } from "lucide-react";
 
 import { ModuleNav } from "@/components/module-nav";
+import { requirePageUser } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +28,9 @@ const modules = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  await requirePageUser();
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.16),_transparent_20%),linear-gradient(180deg,#020617_0%,#0f172a_45%,#020617_100%)]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">

@@ -1,3 +1,4 @@
+import { requireApiUser } from "@/lib/auth";
 import { applyFuelReportFilters, getAllFuelRecords } from "@/lib/fleet-service";
 import { buildDetailedFuelPdfReport } from "@/lib/fuel-pdf-report";
 import type { FuelReportFilters } from "@/types/fuel";
@@ -5,6 +6,11 @@ import type { FuelReportFilters } from "@/types/fuel";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const body = (await request.json()) as Partial<FuelReportFilters>;
     const filters: FuelReportFilters = {

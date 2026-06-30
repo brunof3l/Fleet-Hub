@@ -1,3 +1,4 @@
+import { requireApiUser } from "@/lib/auth";
 import { buildSpeedDashboardData } from "@/lib/speed-dashboard-service";
 import type { SpeedDashboardViolationPayload } from "@/types/speed";
 
@@ -5,6 +6,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const body = (await request.json()) as {
       violations?: SpeedDashboardViolationPayload[];

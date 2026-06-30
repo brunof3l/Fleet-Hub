@@ -1,9 +1,15 @@
+import { requireApiUser } from "@/lib/auth";
 import { conferFaturaBuffer } from "@/lib/fatura-conference";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");

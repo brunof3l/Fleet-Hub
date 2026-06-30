@@ -1,5 +1,7 @@
 import DashboardClient from "@/components/dashboard-client";
+import { requirePageUser } from "@/lib/auth";
 
-export default function CombustivelPage() {
+export default async function CombustivelPage() {
+  await requirePageUser();
   return <DashboardClient />;
 }

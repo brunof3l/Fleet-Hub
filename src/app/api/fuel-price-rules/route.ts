@@ -1,8 +1,14 @@
+import { requireApiUser } from "@/lib/auth";
 import { deleteFuelPriceRule, saveFuelPriceRule } from "@/lib/fleet-service";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const body = (await request.json()) as {
       supplier?: string;
@@ -29,6 +35,11 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const body = (await request.json()) as {
       id?: string;
@@ -57,6 +68,11 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const body = (await request.json()) as {
       id?: string;

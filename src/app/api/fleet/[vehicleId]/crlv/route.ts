@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireApiUser } from "@/lib/auth";
 import { saveFleetVehicleCrlv } from "@/lib/fleet-management-service";
 
 export const runtime = "nodejs";
@@ -9,6 +10,11 @@ export async function POST(
   request: Request,
   { params }: { params: { vehicleId: string } },
 ) {
+  const auth = await requireApiUser();
+  if (auth instanceof Response) {
+    return auth;
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");

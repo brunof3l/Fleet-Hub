@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:frota": "node scripts/seed-fleet-vehicles.mjs"
+    "seed:frota": "node scripts/seed-fleet-vehicles.mjs",
+    "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
