@@ -11,6 +11,14 @@ const brDateFormatter = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
+const brTimeFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "America/Sao_Paulo",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
 type GraphQLFuelling = {
   id: string;
   occurredAt: string;
@@ -18,8 +26,23 @@ type GraphQLFuelling = {
   cost: string | number | null;
   unitPrice: string | number | null;
   fuelType: string | null;
+  odometer: number | null;
+  distanceTraveledInKilometers: number | null;
+  autonomyInKilometersPerLiter: number | null;
   vehicle: { plate: string | null; displayName: string | null } | null;
   provider: { name: string | null } | null;
+};
+
+const FUEL_TYPE_LABELS: Record<string, string> = {
+  DIESEL: "Diesel",
+  DIESEL_S10: "Diesel S10",
+  GASOLINE: "Gasolina",
+  ADDITIVES_GASOLINE: "Gasolina Aditivada",
+  ETHANOL: "Etanol",
+  ARLA_32: "Arla 32",
+  GNV: "GNV",
+  KEROSENE: "Querosene",
+  OTHER: "Outro",
 };
 
 const LIST_FUELLINGS_QUERY = `
@@ -31,6 +54,9 @@ const LIST_FUELLINGS_QUERY = `
       cost
       unitPrice
       fuelType
+      odometer
+      distanceTraveledInKilometers
+      autonomyInKilometersPerLiter
       vehicle {
         plate
         displayName
@@ -81,6 +107,20 @@ function toBrazilDate(isoDate: string): string {
   return brDateFormatter.format(date);
 }
 
+/** Extracts the HH:MM:SS time (Brazil) from an Infleet UTC timestamp. */
+function toBrazilTime(isoDate: string): string {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return brTimeFormatter.format(date);
+}
+
+function fuelTypeLabel(raw: string | null): string {
+  const key = String(raw ?? "").trim().toUpperCase();
+  return FUEL_TYPE_LABELS[key] ?? (raw ? String(raw) : "Nao informado");
+}
+
 function mapFuelling(raw: GraphQLFuelling): InfleetFuelling {
   const rawPlate = String(raw.vehicle?.plate ?? "").trim();
 
@@ -88,14 +128,19 @@ function mapFuelling(raw: GraphQLFuelling): InfleetFuelling {
     id: raw.id,
     occurredAt: raw.occurredAt,
     date: toBrazilDate(raw.occurredAt),
+    time: toBrazilTime(raw.occurredAt),
     rawPlate,
     plate: normalizePlate(rawPlate),
     vehicleName: raw.vehicle?.displayName?.trim() || rawPlate || "Veiculo nao identificado",
     liters: toNumber(raw.amount),
     cost: toNumber(raw.cost),
     unitPrice: toNumber(raw.unitPrice),
-    fuelType: raw.fuelType ?? "",
+    fuelType: fuelTypeLabel(raw.fuelType),
+    fuelTypeRaw: String(raw.fuelType ?? ""),
     supplier: raw.provider?.name?.trim() || "",
+    odometer: toNumber(raw.odometer),
+    distanceKm: toNumber(raw.distanceTraveledInKilometers),
+    autonomy: toNumber(raw.autonomyInKilometersPerLiter),
   };
 }
 

@@ -191,6 +191,7 @@ export interface InfleetFuelling {
   id: string;
   occurredAt: string;
   date: string;
+  time: string;
   plate: string;
   rawPlate: string;
   vehicleName: string;
@@ -198,7 +199,20 @@ export interface InfleetFuelling {
   cost: number;
   unitPrice: number;
   fuelType: string;
+  fuelTypeRaw: string;
   supplier: string;
+  odometer: number;
+  distanceKm: number;
+  autonomy: number;
+}
+
+export interface InfleetSyncResult {
+  inserted: number;
+  updated: number;
+  total: number;
+  fromDate: string;
+  toDate: string;
+  message: string;
 }
 
 export type ConferenceStatus = "CONFORME" | "DIVERGENTE" | "NAO_LANCADO";

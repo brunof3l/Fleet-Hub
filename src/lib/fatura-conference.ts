@@ -1,11 +1,11 @@
-import { fetchInfleetFuellings, hasInfleetConfig } from "@/lib/infleet-service";
+import { hasDatabaseConfig } from "@/lib/env";
 import { parseFaturaPdf } from "@/lib/fatura-parser";
+import { getSyncedInfleetRecords, type SyncedInfleetRecord } from "@/lib/infleet-sync";
 import type {
   ConferenceMatchDetail,
   ConferenceResult,
   ConferenceStatus,
   FaturaLine,
-  InfleetFuelling,
   InfleetOnlyRecord,
 } from "@/types/fuel";
 
@@ -92,7 +92,7 @@ function formatLiters(value: number): string {
   return `${litersFormatter.format(value)} L`;
 }
 
-function buildDivergences(line: FaturaLine, fuelling: InfleetFuelling, dateDiff: number): string[] {
+function buildDivergences(line: FaturaLine, fuelling: SyncedInfleetRecord, dateDiff: number): string[] {
   const divergences: string[] = [];
 
   const quantityTolerance = Math.max(0.5, line.quantity * 0.01);
@@ -157,7 +157,7 @@ export async function conferFaturaBuffer(
   const periodStart = dates[0];
   const periodEnd = dates[dates.length - 1];
 
-  if (!hasInfleetConfig()) {
+  if (!hasDatabaseConfig()) {
     return {
       header: parsed.header,
       periodStart,
@@ -175,14 +175,13 @@ export async function conferFaturaBuffer(
         divergences: [],
       })),
       infleetOnly: [],
-      message:
-        "INFLEET_API_TOKEN nao configurado. Defina a chave da API do Infleet para comparar os lancamentos.",
+      message: "Banco de dados nao configurado.",
     };
   }
 
-  const fuellings = await fetchInfleetFuellings(shiftDate(periodStart, -1), shiftDate(periodEnd, 1));
+  const fuellings = await getSyncedInfleetRecords(shiftDate(periodStart, -1), shiftDate(periodEnd, 1));
 
-  const fuellingsByPlate = new Map<string, InfleetFuelling[]>();
+  const fuellingsByPlate = new Map<string, SyncedInfleetRecord[]>();
   fuellings.forEach((fuelling) => {
     if (!fuelling.plate) {
       return;
@@ -254,7 +253,7 @@ export async function conferFaturaBuffer(
       id: fuelling.id,
       date: fuelling.date,
       vehicle: fuelling.vehicleName,
-      plate: fuelling.rawPlate,
+      plate: fuelling.plate,
       supplier: fuelling.supplier,
       quantity: fuelling.liters,
       totalCost: fuelling.cost,
@@ -264,6 +263,11 @@ export async function conferFaturaBuffer(
   const conformeCount = matches.filter((match) => match.status === "CONFORME").length;
   const divergenteCount = matches.filter((match) => match.status === "DIVERGENTE").length;
   const naoLancadoCount = matches.filter((match) => match.status === "NAO_LANCADO").length;
+
+  const message =
+    fuellings.length === 0
+      ? "Nenhum abastecimento do Infleet encontrado para o periodo. Clique em \"Sincronizar Infleet\" na pagina Combustivel para atualizar a base."
+      : undefined;
 
   return {
     header: parsed.header,
@@ -277,5 +281,6 @@ export async function conferFaturaBuffer(
     faturaTotalValue,
     matches,
     infleetOnly,
+    message,
   };
 }

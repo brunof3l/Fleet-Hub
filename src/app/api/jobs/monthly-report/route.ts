@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       error_message: null,
     });
 
-    const cleanup = await cleanupRetention(60);
+    const cleanup = await cleanupRetention(3);
 
     return Response.json({
       reportMonth: range.reportMonth,

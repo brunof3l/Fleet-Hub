@@ -154,6 +154,7 @@ export default function DashboardClient() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
@@ -233,6 +234,31 @@ export default function DashboardClient() {
       setStatus(error instanceof Error ? error.message : "Falha ao enviar planilha.");
     } finally {
       setIsUploading(false);
+    }
+  }
+
+  async function syncInfleet() {
+    setIsSyncing(true);
+    setStatus("Sincronizando abastecimentos do Infleet...");
+
+    try {
+      const response = await fetch("/api/infleet/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "Falha ao sincronizar com o Infleet.");
+      }
+
+      setStatus(payload.message ?? "Sincronizacao concluida.");
+      await loadDashboard();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Falha ao sincronizar com o Infleet.");
+    } finally {
+      setIsSyncing(false);
     }
   }
 
@@ -502,6 +528,10 @@ export default function DashboardClient() {
               </Button>
               <Button variant="secondary" onClick={() => setShowReportFilters((current) => !current)}>
                 {showReportFilters ? "Fechar filtros PDF" : "Relatorio PDF"}
+              </Button>
+              <Button variant="secondary" onClick={() => void syncInfleet()} disabled={isSyncing}>
+                <RefreshCw className={cn("mr-2 size-4", isSyncing && "animate-spin")} />
+                {isSyncing ? "Sincronizando..." : "Sincronizar Infleet"}
               </Button>
               <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                 <Upload className="mr-2 size-4" />

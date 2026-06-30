@@ -769,14 +769,19 @@ export async function upsertReportLog(record: ReportLogRecord) {
   }
 }
 
-export async function cleanupRetention(retentionDays = 60): Promise<CleanupResult> {
+export async function cleanupRetention(retentionMonths = 3): Promise<CleanupResult> {
   if (!hasDatabaseConfig()) {
     return {
       deletedFuelRows: 0,
     };
   }
 
-  const threshold = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
+  const months = Number.isFinite(retentionMonths) && retentionMonths > 0 ? Math.floor(retentionMonths) : 3;
+  const now = new Date();
+  // Keep the current month plus (months - 1) previous full months. Ex.: com 3
+  // meses, em agosto os abastecimentos de maio (e anteriores) sao removidos.
+  // Os dados continuam no Infleet, entao a base local so guarda a janela recente.
+  const threshold = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1))
     .toISOString()
     .slice(0, 10);
   const sql = getSqlClient();
